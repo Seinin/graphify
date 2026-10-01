@@ -5,7 +5,10 @@ services:
     plan: free
     region: singapore
     branch: main
-    buildCommand: npm ci && npm run build
+    # 注意：下面的 NODE_ENV=production 在构建期同样生效，会让 npm ci 跳过
+    # devDependencies，而 vite / typescript 都在 devDependencies 里，构建会直接失败。
+    # 因此必须显式 --include=dev。
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node server/index.mjs
     healthCheckPath: /api/health
     envVars:
