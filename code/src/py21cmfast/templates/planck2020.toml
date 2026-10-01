@@ -1,0 +1,25 @@
+# Planck Collaboration (2020) 宇宙学参数
+# 平坦 ΛCDM: (ΩΛ, Ωm, Ωb, h, σ8, ns) = (0.69, 0.31, 0.049, 0.68, 0.82, 0.97)
+
+[CosmoParams]
+hlittle = 0.68
+OMm = 0.31
+OMb = 0.049
+SIGMA_8 = 0.82
+POWER_INDEX = 0.97
+
+[SimulationOptions]
+
+[MatterOptions]
+SOURCE_MODEL = 'E-INTEGRAL'
+
+[AstroParams]
+
+[AstroOptions]
+USE_EXP_FILTER = false
+CELL_RECOMB = false
+USE_UPPER_STELLAR_TURNOVER = false
+USE_MINI_HALOS = false
+USE_TS_FLUCT = false
+INHOMO_RECO = false
+HII_FILTER = 'sharp-k'

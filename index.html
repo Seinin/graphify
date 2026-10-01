@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/graphify.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Graphify —— 以 markdown 为知识库的本地知识图谱构建工作台，支持节点引用、关系编辑与 LLM 建图"
+    />
+    <title>Graphify · 知识图谱工作台</title>
+  </head>
+  <body>
+    <!--
+      启动占位与看门狗：模块脚本在「加载 / 链接」阶段失败时（例如开发服务里残留了失效模块），
+      /src/main.tsx 整段都不会执行，React 的错误边界也无从生效，页面只剩下空白。
+      下面这段普通脚本不依赖任何模块，若应用迟迟没有接管 #root，就把占位换成可读诊断与恢复入口。
+      成功挂载时由 AppErrorBoundary 清除占位并打上 data-app-mounted 标记。
+    -->
+    <div id="root">
+      <div
+        data-boot-placeholder
+        style="
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          background: #0a0c11;
+          color: #8b93a7;
+          font: 12.5px/1.7 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        "
+      >
+        <span
+          style="
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 2px solid rgba(255, 255, 255, 0.16);
+            border-top-color: #6366f1;
+            border-radius: 999px;
+            animation: graphify-boot-spin 900ms linear infinite;
+          "
+        ></span>
+        <span>正在启动 Graphify…</span>
+      </div>
+    </div>
+    <style>
+      @keyframes graphify-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+    <script>
+      ;(function () {
+        var TIMEOUT = 10000
+        var lastFailure = ''
+
+        function appMounted() {
+          var root = document.getElementById('root')
+          return !!(root && root.getAttribute('data-app-mounted') === 'true')
+        }
+
+        function escapeHtml(text) {
+          return String(text).replace(/[&<>"']/g, function (char) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
+          })
+        }
+
+        function code(text) {
+          return (
+            '<code style="font-family: JetBrains Mono, SFMono-Regular, Consolas, Menlo, monospace; color: #cdd6ea;">' +
+            escapeHtml(text) +
+            '</code>'
+          )
+        }
+
+        function report() {
+          if (appMounted()) return
+          var root = document.getElementById('root')
+          if (!root || !root.querySelector('[data-boot-placeholder]')) return
+
+          var detail = lastFailure
+            ? '<pre style="margin:0 0 12px; padding:10px 12px; overflow:auto; max-height:160px; border:1px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(0,0,0,0.4); font-family:JetBrains Mono, SFMono-Regular, Consolas, Menlo, monospace; font-size:11px; line-height:1.6; color:#f3a9a9; white-space:pre-wrap; word-break:break-all;">' +
+              escapeHtml(lastFailure) +
+              '</pre>'
+            : ''
+
+          root.innerHTML =
+            '<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0a0c11; padding:24px; box-sizing:border-box; color:#e6e8ef; font:12.5px/1.7 \'PingFang SC\', -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif;">' +
+            '<div style="width:100%; max-width:600px; padding:22px; box-sizing:border-box; border:1px solid rgba(255,255,255,0.12); border-radius:14px; background:#11141b; box-shadow:0 24px 60px -30px #000;">' +
+            '<div style="font-size:14px; font-weight:600; margin-bottom:8px;">界面没能加载出来</div>' +
+            '<p style="margin:0 0 12px; color:#9aa3b8;">前端的模块脚本没有完成加载，页面停在了启动阶段。常见原因是开发服务里残留了失效的模块（热更新之后磁盘已改、服务仍在提供旧模块）。</p>' +
+            detail +
+            '<p style="margin:0; color:#9aa3b8;">先按 Ctrl/Cmd + Shift + R 硬刷新；若仍是这一屏，在 ' +
+            code('Graphify/') +
+            ' 目录重启开发服务（停止 ' +
+            code('node server/index.mjs') +
+            '，删除 ' +
+            code('node_modules/.vite') +
+            ' 后重新 ' +
+            code('npm run dev') +
+            '）。</p>' +
+            '<div style="margin-top:16px; display:flex; gap:8px;">' +
+            '<button data-boot-reload style="height:30px; padding:0 12px; border:0; border-radius:8px; background:#5b5ff0; color:#f6f7ff; font:13px/1 inherit; cursor:pointer;">重新加载</button>' +
+            '<button data-boot-copy style="height:30px; padding:0 12px; border:1px solid rgba(255,255,255,0.14); border-radius:8px; background:rgba(255,255,255,0.04); color:#e6e8ef; font:13px/1 inherit; cursor:pointer;">复制诊断信息</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>'
+
+          var reload = root.querySelector('[data-boot-reload]')
+          if (reload) {
+            reload.addEventListener('click', function () {
+              window.location.reload()
+            })
+          }
+          var copy = root.querySelector('[data-boot-copy]')
+          if (copy) {
+            copy.addEventListener('click', function () {
+              var text = 'Graphify 启动失败' + (lastFailure ? '\n' + lastFailure : '')
+              if (!navigator.clipboard) {
+                copy.textContent = '请手动复制控制台报错'
+                return
+              }
+              navigator.clipboard.writeText(text).then(
+                function () {
+                  copy.textContent = '已复制'
+                },
+                function () {
+                  copy.textContent = '复制失败'
+                },
+              )
+            })
+          }
+        }
+
+        // 资源加载失败时立刻判定，不必干等超时；运行期报错也记下来一并展示。
+        // report() 在应用已接管界面时是空操作，所以提前触发不会误报。
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target
+            if (target && target.tagName === 'SCRIPT') {
+              lastFailure = '脚本加载失败：' + (target.src || '(内联脚本)')
+              window.setTimeout(report, 800)
+              return
+            }
+            if (event.message) {
+              lastFailure = String(event.message)
+              window.setTimeout(report, 1500)
+            }
+          },
+          true,
+        )
+
+        window.setTimeout(report, TIMEOUT)
+      })()
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

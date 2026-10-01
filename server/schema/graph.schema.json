@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphify.local/schema/graph.schema.json",
+  "title": "Graphify 图谱与 LLM 导入契约",
+  "description": "Graphify 的持久化模型与 LLM/脚本建图端口（POST /api/graph/import）的请求契约。导入时节点 id 可省略，边的 source/target 既可以是节点 id，也可以是节点名称（label）。为兼容 Python 侧管线（如按本 schema 生成的 Pydantic 模板），服务端同时接受一组 snake_case 别名：name_label→label、category→type、identifier→id、doc_id→docId（节点与 refs 内均可）、dry_run→dryRun；两者同时出现时以本 schema 的规范名为准。",
+  "type": "object",
+  "definitions": {
+    "nodeType": {
+      "type": "string",
+      "enum": [
+        "group",
+        "concept",
+        "doc",
+        "section",
+        "method",
+        "driver",
+        "variable",
+        "artifact",
+        "result",
+        "question",
+        "dataset",
+        "tool"
+      ],
+      "description": "group=大框（画布容器，把若干小框圈成一层） concept=概念 doc=文档 section=章节 method=方法 result=结论 question=问题 dataset=数据 tool=工具"
+    },
+    "edgeType": {
+      "type": "string",
+      "enum": [
+        "depends_on",
+        "relates_to",
+        "derives_from",
+        "references",
+        "contradicts",
+        "extends"
+      ],
+      "description": "depends_on=依赖 relates_to=相关 derives_from=源自 references=引用 contradicts=相斥 extends=扩展"
+    },
+    "ref": {
+      "type": "object",
+      "description": "节点对知识库的引用。两种目标共用一条记录：notes 文档填 docId（+ 可选 anchor）；源代码填 file（相对仓库根的路径）+ 可选 line / endLine（行区间）。两者至少填一个。",
+      "properties": {
+        "docId": {
+          "type": "string",
+          "description": "相对 notes 数据库根目录（默认 docs/notes/）的路径，使用正斜杠。源码引用可为空"
+        },
+        "anchor": {
+          "type": "string",
+          "description": "标题锚点 slug，由标题小写化、空白转连字符后去掉标点得到；可留空表示文档开头"
+        },
+        "label": {
+          "type": "string",
+          "description": "展示用标题，如 §5.6 A′ 或 thermochem.c:536；可留空"
+        },
+        "file": {
+          "type": "string",
+          "description": "源码文件路径，相对仓库根、使用正斜杠，例如 src/py21cmfast/src/thermochem.c；引用源码时必填"
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "起始行（1 起，含）；不指定则从第 1 行开始预览"
+        },
+        "endLine": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "结束行（含）；等于 line 时按单行高亮"
+        }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "docId"
+          ]
+        },
+        {
+          "required": [
+            "file"
+          ]
+        }
+      ]
+    },
+    "tagDetailItem": {
+      "type": "object",
+      "description": "标签明细条目：标签在某个节点上具体是什么（参数名 / 子过程名 …）",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "条目名，如参数名 DIM、BOX_LEN"
+        },
+        "kind": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "该标签在此节点的角色，如 赋值 / 入公式 / 开关"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "ref": {
+          "description": "出处：源码 file + line / endLine，或 notes 文档 docId + anchor",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "稳定标识；省略时由服务端生成 n_xxxxxxxxxx"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "节点名称，必填"
+        },
+        "type": {
+          "$ref": "#/definitions/nodeType"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "maxItems": 24,
+          "description": "全局标签 id 列表（不是自由文本）；每个 id 都必须已在顶层 meta.tags 中登记，否则服务端拒绝写入。导入草案里可以写标签名，合并时按名字匹配或自动登记"
+        },
+        "tagDetails": {
+          "type": "object",
+          "description": "标签明细：键是本节点 tags 里的标签 id，值是该标签在此节点的条目列表（如参数名 · 用法 · 出处）",
+          "additionalProperties": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/definitions/tagDetailItem"
+            }
+          }
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ref"
+          },
+          "maxItems": 48
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 12,
+          "description": "所属话题 id 列表；每个 id 都必须已在顶层 meta.topics 中登记，否则服务端拒绝写入。省略表示不参与话题过滤"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "父节点 id 或名称；null 表示顶层。层级只由该字段表达，禁止用边构造环路"
+        },
+        "position": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "conditional": {
+          "type": "boolean",
+          "default": false,
+          "description": "条件/可选节点：画布上用虚线框表达（例如「仅 lagrangian 源模型时才存在」的步骤）"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "可省略，省略时由服务端生成 e_xxxxxxxxxx"
+        },
+        "source": {
+          "type": "string",
+          "description": "起点：节点 id 或节点名称"
+        },
+        "target": {
+          "type": "string",
+          "description": "终点：节点 id 或节点名称"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "关系名称（显示在连边上），必填"
+        },
+        "type": {
+          "$ref": "#/definitions/edgeType"
+        },
+        "directed": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否有向（影响箭头显示）"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "sourcePort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "n",
+            "e",
+            "s",
+            "w",
+            null
+          ],
+          "default": null,
+          "description": "起点吸附端口：n=上 e=右 s=下 w=左；null=自动吸到离终点最近的边"
+        },
+        "targetPort": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "n",
+            "e",
+            "s",
+            "w",
+            null
+          ],
+          "default": null,
+          "description": "终点吸附端口；null=自动吸到离起点最近的边"
+        },
+        "conditional": {
+          "type": "boolean",
+          "default": false,
+          "description": "条件/可选流动：画布上用虚线连线表达（例如「只有 lagrangian 源模型才有这条数据流」）"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "label"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "merge",
+        "replace"
+      ],
+      "default": "merge",
+      "description": "merge=按 id 或 label 去重合并（幂等，推荐）；replace=清空后重建"
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "为 true 时只校验并返回差异预览，不写入磁盘；也可用 POST /api/graph/import?dryRun=1"
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "topics": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "话题注册表；话题是图谱级视图，切换话题即整张画布换内容。节点通过自己的 topics 字段引用这里的 id",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 60,
+          "description": "全局标签注册表：id / 名称 / 说明 / 可选颜色。节点通过自己的 tags 字段（存 id）引用；改名不动归属",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/node"
+      },
+      "maxItems": 2000
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/edge"
+      },
+      "maxItems": 6000
+    }
+  },
+  "required": [
+    "nodes",
+    "edges"
+  ],
+  "additionalProperties": false
+}

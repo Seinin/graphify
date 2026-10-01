@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: graphify
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: node server/index.mjs
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 这三个变量原本指向 21cmFAST 仓库的上级目录，
+      # 独立部署后必须重指向包内自带的精简副本，否则接口读不到数据。
+      - key: GRAPHIFY_MD_DIR
+        value: notes
+      - key: GRAPHIFY_CODE_DIR
+        value: code
+      - key: GRAPHIFY_DATA_DIR
+        value: data

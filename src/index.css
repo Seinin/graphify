@@ -1,0 +1,263 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 32% 12%;
+    --panel: 220 24% 99%;
+    --panel-foreground: 224 32% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 32% 12%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 12% 44%;
+    --accent: 222 32% 95%;
+    --accent-foreground: 224 36% 18%;
+    --primary: 239 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 95%;
+    --secondary-foreground: 224 24% 26%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 68% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 30 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --border: 220 16% 89%;
+    --input: 220 16% 89%;
+    --ring: 239 84% 60%;
+    --radius: 14px;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans text-body antialiased;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+    color: hsl(var(--foreground));
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.75);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.7);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(222 14% 78% / 0.9);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(222 14% 64% / 0.95);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* 玻璃拟态面板：半透明 + 模糊 + 顶部高光描边（浅色主题：白玻璃 + 低透明黑描边） */
+  .glass-panel {
+    @apply relative border border-black/[0.06] bg-white/80 shadow-panel backdrop-blur-xl;
+    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.55) 0%, hsl(0 0% 100% / 0.1) 100%);
+  }
+
+  .glass-panel::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+    background: linear-gradient(90deg, transparent, hsl(226 30% 42% / 0.12), transparent);
+  }
+
+  /* 画布点阵底纹，缩放时由组件控制透明度 */
+  .canvas-grid {
+    background-color: hsl(0 0% 100%);
+    background-image:
+      radial-gradient(circle at 50% 0%, hsl(243 70% 58% / 0.07), transparent 60%),
+      radial-gradient(hsl(226 20% 84%) 1px, transparent 0);
+    background-size: 100% 100%, 22px 22px;
+  }
+
+  .brand-text {
+    @apply bg-brand-sheen bg-clip-text text-transparent;
+  }
+
+  .hairline {
+    @apply h-px w-full bg-black/[0.07];
+  }
+
+  /* 文档阅读器里的 KaTeX：显示公式允许横向滚动，避免长公式把抽屉撑破 */
+  .md-body .katex {
+    font-size: 1.04em;
+    line-height: 1.2;
+  }
+
+  .md-body .katex-display {
+    margin: 0.9em 0;
+    padding: 2px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .md-body .katex-display > .katex {
+    white-space: nowrap;
+  }
+
+  /* throwOnError:false 时的不兼容命令降级样式 */
+  .md-body .katex-error {
+    padding: 0 3px;
+    border-radius: 4px;
+    background: rgb(248 113 113 / 0.12);
+    font-family: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, monospace;
+    font-size: 0.86em;
+  }
+}
+
+@layer utilities {
+  .no-drag {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/*
+ * Radix ScrollArea 的 Viewport 内部还会再包一层
+ * <div style="min-width:100%; display:table">：display:table 会按内容 nowrap 宽度撑开该盒子，
+ * 超出部分被 Root 的 overflow-hidden 直接裁掉且不产生横向滚动，表现为「目录与正文右缘被遮挡」。
+ * 内联样式必须用 !important 才能覆盖。表格与代码块各自包在 overflow-x-auto 容器里，改成 block 不影响其横向滚动。
+ */
+@layer utilities {
+  [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    min-width: 0 !important;
+  }
+}
+
+/* 行间公式超宽时在自身区域内横滚，不撑破阅读抽屉 */
+.md-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+/* ------------------------------------------------------------------
+   有子图的模块（还能往下钻）：呼吸光晕 + 干净的粒子
+   ------------------------------------------------------------------
+   画在 DOM 覆盖层上（与红点徽标同一套定位），所以缩放、平移、高分屏都跟着走；
+   纯 CSS 动画，不占 JS 每帧计算。降低动效偏好由文件末尾的全局规则统一关掉。 */
+
+@keyframes subgraph-breathe {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.035);
+  }
+}
+
+.subgraph-halo {
+  transform-origin: center;
+  border: 1.5px solid rgb(99 102 241 / 0.55);
+  box-shadow: 0 0 14px 3px rgb(99 102 241 / 0.2);
+  animation: subgraph-breathe 3.2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* 粒子：从框内缓缓上浮、淡出，同时带一点横向漂移（每个粒子用 --drift 各走各的） */
+@keyframes subgraph-particle-drift {
+  0% {
+    transform: translate(0, 6px) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(var(--drift, 0px), -16px) scale(1);
+    opacity: 0;
+  }
+}
+
+.subgraph-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(199 210 254) 0%, rgb(99 102 241) 70%);
+  box-shadow: 0 0 6px 1px rgb(129 140 248 / 0.55);
+  /* 基础态不可见：即使动画被系统关掉，也不会留下一堆静止的小点 */
+  opacity: 0;
+  animation: subgraph-particle-drift 3.2s linear infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+  系统关闭动画时（Windows「显示动画」关掉，或浏览器开了「减少动态效果」），上面那条全局规则会把
+  所有动画冻住——「呼吸」于是变成一圈静止的细边，看起来就像没做效果。这里给静态替代：
+  边加粗改成虚线，让「这里还能往下钻」照样看得出来。
+  （放在全局规则**之后**，否则会被它的 !important 盖过。）
+*/
+@media (prefers-reduced-motion: reduce) {
+  .subgraph-halo {
+    animation: none;
+    opacity: 0.9;
+    border: 2px dashed rgb(99 102 241 / 0.7);
+    box-shadow: none;
+  }
+  .subgraph-particle {
+    display: none;
+  }
+}

@@ -1,0 +1,6382 @@
+{
+  "meta": {
+    "version": 1,
+    "name": "未命名图谱",
+    "description": "由 docs/notes/atlas 的图一（主调度链）与图二（三个顶层驱动）迁移而来：层带 = 大框，点进去看该层的步骤；虚线 = 条件/可选。节点的源码引用可直接预览对应行。",
+    "topics": [
+      {
+        "id": "ic-pre",
+        "name": "① 输入与前置",
+        "description": "参数集、随机种子与功率谱：链启动前必须先就位的东西。"
+      },
+      {
+        "id": "ic-density",
+        "name": "② 密度场",
+        "description": "从 k 空间高斯实现到高低分辨密度：抽样、共轭修正、反变换、滤波与降采样。"
+      },
+      {
+        "id": "ic-velocity",
+        "name": "③ 速度场",
+        "description": "一阶（ZA）、相对速度 vcb 与二阶 2LPT：三条各自独立的可选支路。"
+      },
+      {
+        "id": "ic-boundary",
+        "name": "④ 回收与下游",
+        "description": "内部中间量在这里被释放，存活下来的输出在这里被下游消费。"
+      },
+      {
+        "id": "atlas-fig1",
+        "name": "图一 · 主调度链",
+        "description": "五层主干：入口 / 编排 / 备料 / 红移循环 / 输出。"
+      },
+      {
+        "id": "atlas-fig2",
+        "name": "图二 · 三个顶层驱动",
+        "description": "run_coeval / run_lightcone / run_global_evolution 各自的步骤序列。"
+      }
+    ],
+    "tags": [
+      {
+        "id": "tag:hlittle",
+        "name": "hlittle",
+        "description": "",
+        "group": "CosmoParams",
+        "docId": "graphify/G3-初始条件.md",
+        "color": "#4B5563"
+      },
+      {
+        "id": "tag:OMb",
+        "name": "OMb",
+        "description": "",
+        "group": "CosmoParams",
+        "docId": "graphify/G3-初始条件.md",
+        "color": "#4B5563"
+      },
+      {
+        "id": "tag:OMm",
+        "name": "OMm",
+        "description": "",
+        "group": "CosmoParams",
+        "docId": "graphify/G3-初始条件.md",
+        "color": "#4B5563"
+      },
+      {
+        "id": "tag:OMn",
+        "name": "OMn",
+        "description": "",
+        "group": "CosmoParams",
+        "docId": "graphify/G3-初始条件.md",
+        "color": "#4B5563"
+      },
+      {
+        "id": "tag:SOURCE_MODEL",
+        "name": "SOURCE_MODEL",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "THREE_PIPELINES.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:PERTURB_ALGORITHM",
+        "name": "PERTURB_ALGORITHM",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:USE_INTERPOLATION_TABLES",
+        "name": "USE_INTERPOLATION_TABLES",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "tags/USE_INTERPOLATION_TABLES.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:KEEP_3D_VELOCITIES",
+        "name": "KEEP_3D_VELOCITIES",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "tags/KEEP_3D_VELOCITIES.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:MINIMIZE_MEMORY",
+        "name": "MINIMIZE_MEMORY",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "tags/MINIMIZE_MEMORY.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:PERTURB_ON_HIGH_RES",
+        "name": "PERTURB_ON_HIGH_RES",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:USE_FFTW_WISDOM",
+        "name": "USE_FFTW_WISDOM",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:USE_RELATIVE_VELOCITIES",
+        "name": "USE_RELATIVE_VELOCITIES",
+        "description": "",
+        "group": "MatterOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#1D4ED8"
+      },
+      {
+        "id": "tag:DIM",
+        "name": "DIM",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:HII_DIM",
+        "name": "HII_DIM",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:HIRES_TO_LOWRES_FACTOR",
+        "name": "HIRES_TO_LOWRES_FACTOR",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:BOX_LEN",
+        "name": "BOX_LEN",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:Z_HEAT_MAX",
+        "name": "Z_HEAT_MAX",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "tags/Z_HEAT_MAX.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:N_THREADS",
+        "name": "N_THREADS",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:NON_CUBIC_FACTOR",
+        "name": "NON_CUBIC_FACTOR",
+        "description": "",
+        "group": "SimulationOptions",
+        "docId": "INITIAL_CONDITIONS.md",
+        "color": "#047857"
+      },
+      {
+        "id": "tag:PHOTON_CONS_TYPE",
+        "name": "PHOTON_CONS_TYPE",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/PHOTON_CONS_TYPE.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:USE_TS_FLUCT",
+        "name": "USE_TS_FLUCT",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/USE_TS_FLUCT.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:INTEGRATION_METHOD_ATOMIC",
+        "name": "INTEGRATION_METHOD_ATOMIC",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/INTEGRATION_METHOD_ATOMIC.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:INTEGRATION_METHOD_MINI",
+        "name": "INTEGRATION_METHOD_MINI",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/INTEGRATION_METHOD_MINI.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:USE_UPPER_STELLAR_TURNOVER",
+        "name": "USE_UPPER_STELLAR_TURNOVER",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/USE_UPPER_STELLAR_TURNOVER.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:USE_EXP_FILTER",
+        "name": "USE_EXP_FILTER",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/USE_EXP_FILTER.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:USE_MINI_HALOS",
+        "name": "USE_MINI_HALOS",
+        "description": "",
+        "group": "AstroOptions",
+        "docId": "tags/USE_MINI_HALOS.md",
+        "color": "#B45309"
+      },
+      {
+        "id": "tag:PHOTONCONS_CALIBRATION_END",
+        "name": "PHOTONCONS_CALIBRATION_END",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "tags/PHOTONCONS_CALIBRATION_END.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:M_TURN",
+        "name": "M_TURN",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "THREE_PIPELINES.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:N_STEP_TS",
+        "name": "N_STEP_TS",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "tags/N_STEP_TS.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:R_MAX_TS",
+        "name": "R_MAX_TS",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "tags/R_MAX_TS.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:F_ESC10",
+        "name": "F_ESC10",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "THREE_PIPELINES.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:F_STAR10",
+        "name": "F_STAR10",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "THREE_PIPELINES.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:HII_EFF_FACTOR",
+        "name": "HII_EFF_FACTOR",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "THREE_PIPELINES.md",
+        "color": "#7E22CE"
+      },
+      {
+        "id": "tag:POP2_ION",
+        "name": "POP2_ION",
+        "description": "",
+        "group": "AstroParams",
+        "docId": "tags/POP2_ION.md",
+        "color": "#7E22CE"
+      }
+    ],
+    "updatedAt": "2026-10-01T09:02:59.300Z"
+  },
+  "nodes": [
+    {
+      "id": "ic:proc-seed",
+      "label": "过程① 逐线程种子派生",
+      "type": "method",
+      "summary": "由 random_seed 派生 N_THREADS 个互不相同的种子（从 INT_MAX/16 个整数里 choose 再 shuffle），按 5 种 GSL 生成器轮换，给每个线程一条自己的流。全链只有这一处用到随机数。",
+      "tags": [
+        "tag:N_THREADS"
+      ],
+      "tagDetails": {
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/rng.c",
+              "line": 36,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "41-步骤-①逐线程种子派生srcrngc30-89",
+          "label": "4.1 步骤 ①：逐线程种子派生（src/rng.c:30-89）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0911-seed_rng_threads",
+          "label": "S09.1.1 seed_rng_threads",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "seed_rng_threads 逐线程种子派生（rng.c:30-89）",
+          "file": "src/py21cmfast/src/rng.c",
+          "line": 30,
+          "endLine": 89
+        }
+      ],
+      "topics": [
+        "ic-pre"
+      ],
+      "parent": "ic:g-load",
+      "conditional": false,
+      "position": {
+        "x": -297,
+        "y": -317
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.992Z"
+    },
+    {
+      "id": "ic:proc-ps",
+      "label": "过程② 功率谱就绪",
+      "type": "method",
+      "summary": "init_ps() 把宇宙学参数整理成 cosmo_consts（omhh、theta_cmb、f_nu、f_baryon…），供 power_in_k 逐模求值；对应的释放是收尾的 free_ps()。",
+      "tags": [
+        "tag:hlittle",
+        "tag:OMb",
+        "tag:OMm",
+        "tag:OMn"
+      ],
+      "tagDetails": {
+        "tag:hlittle": [
+          {
+            "label": "hlittle",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/cosmology.c",
+              "line": 538,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:OMb": [
+          {
+            "label": "OMb",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/cosmology.c",
+              "line": 542,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:OMm": [
+          {
+            "label": "OMm",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/cosmology.c",
+              "line": 538,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:OMn": [
+          {
+            "label": "OMn",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/cosmology.c",
+              "line": 541,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "42-步骤-②功率谱就绪srccosmologyc536-545",
+          "label": "4.2 步骤 ②：功率谱就绪（src/cosmology.c:536-545）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "init_ps 功率谱就绪（cosmology.c:536-545）",
+          "file": "src/py21cmfast/src/cosmology.c",
+          "line": 536,
+          "endLine": 545
+        }
+      ],
+      "topics": [
+        "ic-pre"
+      ],
+      "parent": "ic:g-load",
+      "conditional": false,
+      "position": {
+        "x": -135,
+        "y": -317
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.992Z"
+    },
+    {
+      "id": "ic:proc-sample",
+      "label": "过程③ k 空间高斯抽样",
+      "type": "method",
+      "summary": "逐独立 k 模（只遍历 z 方向一半）取 box(k) = sqrt(V·P(k)/2)·(a + i·b)，a、b 为两个独立标准正态；P(k) 里已含相对速度压制项与 FDM 的 T_F²。",
+      "tags": [
+        "tag:N_THREADS"
+      ],
+      "tagDetails": {
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 105,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "43-步骤-③k-空间高斯抽样srcinitialconditionsc103-139",
+          "label": "4.3 步骤 ③：k 空间高斯抽样（src/InitialConditions.c:103-139）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0931-sample_ic_modes",
+          "label": "S09.3.1 sample_ic_modes",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "sample_ic_modes k 空间抽样（InitialConditions.c:103-139）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 103,
+          "endLine": 139
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-dens",
+      "conditional": false,
+      "position": {
+        "x": 351,
+        "y": -109
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.992Z"
+    },
+    {
+      "id": "ic:proc-conj",
+      "label": "过程④ 共轭对称修正",
+      "type": "method",
+      "summary": "把只填了半空间的 k 盒补成共轭对称：7 个自共轭角点取实部、DC 模置零、再处理两条切片与 i 角点行——保证反变换出来是实场。改动风险高，是纯索引技巧。",
+      "tags": [
+        "tag:DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR"
+      ],
+      "tagDetails": {
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 31,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 55,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 32,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "44-步骤-④共轭对称修正srcinitialconditionsc26-101",
+          "label": "4.4 步骤 ④：共轭对称修正（src/InitialConditions.c:26-101）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "共轭对称修正（InitialConditions.c:26-101）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 26,
+          "endLine": 101
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-dens",
+      "conditional": false,
+      "position": {
+        "x": 666,
+        "y": -187
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.992Z"
+    },
+    {
+      "id": "ic:proc-realize",
+      "label": "过程⑤ 实空间化（高分辨密度）",
+      "type": "method",
+      "summary": "c2r 反变换后除 VOLUME 得 hires_density；同时把 δ_k memcpy 进 HIRES_box_saved 作只读副本——后面所有速度场都从这块副本派生。",
+      "tags": [
+        "tag:DIM",
+        "tag:N_THREADS",
+        "tag:USE_FFTW_WISDOM"
+      ],
+      "tagDetails": {
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 674,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 675,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 674,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "45-步骤-⑤实空间化与高分辨密度srcinitialconditionsc666-697",
+          "label": "4.5 步骤 ⑤：实空间化与高分辨密度（src/InitialConditions.c:666-697）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0921-dft_r2c_cube",
+          "label": "S09.2.1 dft_r2c_cube",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "实空间化与高分辨密度（InitialConditions.c:666-697）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 666,
+          "endLine": 697
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-dens",
+      "conditional": false,
+      "position": {
+        "x": 649,
+        "y": -108
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-lowres",
+      "label": "过程⑥ 滤波与低分辨密度",
+      "type": "method",
+      "summary": "从副本 memcpy 恢复工作盒 → 仅在 DIM≠HII_DIM 时做顶帽滤波（R = l_factor·BOX_LEN/HII_DIM）→ 反变换 → 用 resample_index 采样到低分辨（维度比未必是整数，故在输出格点上加 0.5 再取整）。",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:USE_FFTW_WISDOM"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 704,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 702,
+              "endLine": null
+            }
+          },
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 710,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 702,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 705,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 711,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 710,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "46-步骤-⑥滤波与低分辨密度srcinitialconditionsc698-732",
+          "label": "4.6 步骤 ⑥：滤波与低分辨密度（src/InitialConditions.c:698-732）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0932-filter_box",
+          "label": "S09.3.2 filter_box",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "滤波与低分辨密度（InitialConditions.c:698-732）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 698,
+          "endLine": 732
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-dens",
+      "conditional": false,
+      "position": {
+        "x": 915,
+        "y": -104
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-v1",
+      "label": "过程⑦ 一阶速度场（ZA）",
+      "type": "method",
+      "summary": "对三个方向各做一次 v_i(k) = δ_k·i·k_i/k²（DC 模单独置零，否则除零出 NaN）→ 按 PERTURB_ON_HIGH_RES 决定是否先滤波 → 反变换 → 采样并除 V。",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_FFTW_WISDOM"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 322,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 307,
+              "endLine": null
+            }
+          },
+          {
+            "label": "DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 331,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 315,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 331,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 340,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 323,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 339,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "47-步骤-⑦一阶速度场srcinitialconditionsc299-364",
+          "label": "4.7 步骤 ⑦：一阶速度场（src/InitialConditions.c:299-364）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0941-compute_velocity_fields",
+          "label": "S09.4.1 compute_velocity_fields",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "一阶速度场（ZA）（InitialConditions.c:299-364）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 299,
+          "endLine": 364
+        }
+      ],
+      "topics": [
+        "ic-velocity"
+      ],
+      "parent": "ic:g-vel",
+      "conditional": false,
+      "position": {
+        "x": -846,
+        "y": -42
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-vcb",
+      "label": "过程⑧ 相对速度 vcb",
+      "type": "method",
+      "summary": "用 v_i(k) = δ_k·i·k_i/k·sqrt(P_vcb/P)·c_kms 构造三个方向，先滤波到低分辨再反变换，最后取模 sqrt(Σv_i²)/V。只支持 CLASS 功率谱，并且它会同时改变 P(k)。",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_FFTW_WISDOM",
+        "tag:USE_RELATIVE_VELOCITIES"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 155,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 539,
+              "endLine": null
+            }
+          },
+          {
+            "label": "DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 197,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 533,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 197,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 158,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 535,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 563,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 550,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 205,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_RELATIVE_VELOCITIES": [
+          {
+            "label": "USE_RELATIVE_VELOCITIES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 576,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "48-步骤-⑧相对速度-vcb可选srcinitialconditionsc141-238",
+          "label": "4.8 步骤 ⑧：相对速度 vcb（可选，src/InitialConditions.c:141-238）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0943-compute_relative_velocities",
+          "label": "S09.4.3 compute_relative_velocities",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "outputs.py:576（USE_RELATIVE_VELOCITIES 分支）",
+          "file": "src/py21cmfast/wrapper/outputs.py",
+          "line": 576,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "相对速度 vcb（InitialConditions.c:141-238）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 141,
+          "endLine": 238
+        }
+      ],
+      "topics": [
+        "ic-velocity"
+      ],
+      "parent": "ic:g-vcb",
+      "conditional": true,
+      "position": {
+        "x": 181,
+        "y": 85
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-2lpt-phi",
+      "label": "过程⑨a 合成 φ₂ 的 k 空间场",
+      "type": "method",
+      "summary": "对 (00)(11)(22) 求 φ₁ 对角分量（借用 hires_v*_2LPT 当工作区，省一次大分配），再对 (01)(02)(12) 就地合成 ∇²φ₂ = Σ(φ_ii·φ_jj − φ_ij²)，归一化 /(V²·N)。",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_FFTW_WISDOM",
+        "tag:USE_RELATIVE_VELOCITIES"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 394,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 539,
+              "endLine": null
+            }
+          },
+          {
+            "label": "DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 514,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 533,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 514,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 406,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 535,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 563,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 550,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 427,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_RELATIVE_VELOCITIES": [
+          {
+            "label": "USE_RELATIVE_VELOCITIES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 576,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "49-步骤-⑨二阶修正-2lpt可选srcinitialconditionsc366-544",
+          "label": "4.9 步骤 ⑨：二阶修正 2LPT（可选，src/InitialConditions.c:366-544）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0942-compute_velocity_fields_2lpt",
+          "label": "S09.4.2 compute_velocity_fields_2LPT",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "outputs.py:563（PERTURB_ALGORITHM == \"2LPT\" 分支）",
+          "file": "src/py21cmfast/wrapper/outputs.py",
+          "line": 563,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "二阶修正 φ₂ 合成（InitialConditions.c:366-544）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 366,
+          "endLine": 544
+        }
+      ],
+      "topics": [
+        "ic-velocity"
+      ],
+      "parent": "ic:g-vel",
+      "conditional": true,
+      "position": {
+        "x": -528,
+        "y": -160
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-2lpt-v",
+      "label": "过程⑨b 由 φ₂ 得二阶速度",
+      "type": "method",
+      "summary": "把 ∇²φ₂ 变换回 k 空间并覆写 HIRES_box_saved，然后与 ZA 同路：求梯度 → 必要时滤波 → 反变换 → 采样得二阶速度。",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_FFTW_WISDOM",
+        "tag:USE_RELATIVE_VELOCITIES"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 394,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 379,
+              "endLine": null
+            }
+          },
+          {
+            "label": "DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 514,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 387,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 514,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 406,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 395,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 591,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 585,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_FFTW_WISDOM": [
+          {
+            "label": "USE_FFTW_WISDOM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 427,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_RELATIVE_VELOCITIES": [
+          {
+            "label": "USE_RELATIVE_VELOCITIES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 606,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "49-步骤-⑨二阶修正-2lpt可选srcinitialconditionsc366-544",
+          "label": "4.9 步骤 ⑨：二阶修正 2LPT（可选，src/InitialConditions.c:366-544）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0942-compute_velocity_fields_2lpt",
+          "label": "S09.4.2 compute_velocity_fields_2LPT",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "outputs.py:591（2LPT 速度场的保留清单）",
+          "file": "src/py21cmfast/wrapper/outputs.py",
+          "line": 591,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "二阶修正 由 φ₂ 得二阶速度（InitialConditions.c:366-544）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 366,
+          "endLine": 544
+        }
+      ],
+      "topics": [
+        "ic-velocity"
+      ],
+      "parent": "ic:g-vel",
+      "conditional": true,
+      "position": {
+        "x": -538,
+        "y": -45
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-cleanup",
+      "label": "过程⑩ 收尾与资源回收",
+      "type": "method",
+      "summary": "清 FFTW 线程与计划、释放两个工作盒、free_ps()（含 CLASS 插值器）、free_rng_threads()。顺序有讲究：free_ps 必须排在 2LPT 支路之后。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "410-步骤-⑩收尾与资源回收srcinitialconditionsc760-771",
+          "label": "4.10 步骤 ⑩：收尾与资源回收（src/InitialConditions.c:760-771）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0951-computeinitialconditions",
+          "label": "S09.5.1 ComputeInitialConditions",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "收尾与资源回收（InitialConditions.c:760-771）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 760,
+          "endLine": 771
+        }
+      ],
+      "topics": [
+        "ic-boundary"
+      ],
+      "parent": "ic:g-out",
+      "conditional": false,
+      "position": {
+        "x": -127,
+        "y": 306
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:proc-downstream",
+      "label": "下游｜S10 微扰场与源项（消费方）",
+      "type": "method",
+      "summary": "本链的 5 个输出在这里被消费：perturb_field 做降采样 / 平滑 / 速度位移，低分辨 vcb 供自旋温度阶段使用。这是\"产物作为联系\"的下游端点——链在这里离开本专题。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "15-谁消费已有-ics拿到它才能往下算",
+          "label": "1.5 谁\"消费\"已有 ICs：拿到它才能往下算",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L1-stages.md",
+          "anchor": "s10-微扰场与速度",
+          "label": "S10 微扰场与速度",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-boundary"
+      ],
+      "parent": "ic:g-out",
+      "conditional": false,
+      "position": {
+        "x": 88,
+        "y": 306
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:art-inputs",
+      "label": "输入｜InputParameters（P01）",
+      "type": "variable",
+      "summary": "DIM / HII_DIM / BOX_LEN / NON_CUBIC_FACTOR、random_seed，以及三个开关：PERTURB_ON_HIGH_RES（速度场落哪一档）、PERTURB_ALGORITHM（1LPT/2LPT）、USE_RELATIVE_VELOCITIES（是否算 vcb）。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "52-参数怎么影响结果",
+          "label": "5.2 参数怎么影响结果",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-pre"
+      ],
+      "parent": "ic:g-load",
+      "conditional": false,
+      "position": {
+        "x": -233,
+        "y": -431
+      },
+      "createdAt": "2026-09-21T11:33:30.814Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:fig1:entry",
+      "label": "① 入口层",
+      "type": "group",
+      "summary": "",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": null,
+      "conditional": false,
+      "position": {
+        "x": -20,
+        "y": -303
+      },
+      "createdAt": "2026-09-24T08:57:33.885Z",
+      "updatedAt": "2026-09-25T00:55:57.591Z"
+    },
+    {
+      "id": "atlas:fig1:entry:cli",
+      "label": "入口",
+      "type": "driver",
+      "summary": "命令行：21cmfast run coeval | lightcone | ics；Python API：import py21cmfast → run_coeval / run_lightcone / run_global_evolution",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "cli.py:63",
+          "file": "src/py21cmfast/cli.py",
+          "line": 63,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "__init__.py",
+          "file": "src/py21cmfast/__init__.py",
+          "line": 1,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:entry",
+      "conditional": false,
+      "position": {
+        "x": -1866,
+        "y": -562
+      },
+      "createdAt": "2026-09-24T08:57:33.885Z",
+      "updatedAt": "2026-09-27T09:58:56.639Z"
+    },
+    {
+      "id": "atlas:fig1:orchestrate",
+      "label": "② 编排层（选一条）",
+      "type": "group",
+      "summary": "",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": null,
+      "conditional": false,
+      "position": {
+        "x": -1846,
+        "y": -502
+      },
+      "createdAt": "2026-09-24T08:57:33.885Z",
+      "updatedAt": "2026-09-25T00:55:57.591Z"
+    },
+    {
+      "id": "atlas:fig1:orchestrate:a",
+      "label": "入口 A · 21cmfast run ics",
+      "type": "driver",
+      "summary": "只造 ICs 就结束（缓存里已有则跳过，:418-428）；不进备料层其余步骤、不进红移循环",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "cli.py:393",
+          "file": "src/py21cmfast/cli.py",
+          "line": 393,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:orchestrate",
+      "conditional": false,
+      "position": {
+        "x": -2082,
+        "y": -431
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig1:orchestrate:b",
+      "label": "入口 B · 三个顶层驱动",
+      "type": "driver",
+      "summary": "run_coeval / run_lightcone / run_global_evolution（跑完整流水线）",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:632",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 632,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:691",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 691,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:230",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 230,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:orchestrate",
+      "conditional": false,
+      "position": {
+        "x": -1640,
+        "y": -431
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig1:orchestrate:setup",
+      "label": "_setup_ics_and_pfs_for_scrolling",
+      "type": "method",
+      "summary": "三条流水线共用同一份备料实现",
+      "tags": [
+        "tag:MINIMIZE_MEMORY",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:PHOTONCONS_CALIBRATION_END"
+      ],
+      "tagDetails": {
+        "tag:MINIMIZE_MEMORY": [
+          {
+            "label": "MINIMIZE_MEMORY",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 894,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 863,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 870,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTONCONS_CALIBRATION_END": [
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 871,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 876,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:837",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 837,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:orchestrate",
+      "conditional": false,
+      "position": {
+        "x": -1856,
+        "y": -431
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-26T08:59:07.909Z"
+    },
+    {
+      "id": "atlas:fig1:prep",
+      "label": "③ 备料层（只做一次，与红移无关）",
+      "type": "group",
+      "summary": "",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": null,
+      "conditional": false,
+      "position": {
+        "x": -1899,
+        "y": -143
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-25T00:55:57.591Z"
+    },
+    {
+      "id": "atlas:fig1:prep:ics",
+      "label": "compute_initial_conditions",
+      "type": "method",
+      "summary": "造初始条件；已有则跳过",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:37",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 37,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:prep",
+      "conditional": false,
+      "position": {
+        "x": -2238,
+        "y": -143
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig1:prep:photoncons",
+      "label": "setup_photon_cons",
+      "type": "method",
+      "summary": "可选步骤：必须在 perturb_field 之前跑；备料层调用",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "photoncons.py:202",
+          "file": "src/py21cmfast/drivers/photoncons.py",
+          "line": 202,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:prep",
+      "conditional": true,
+      "position": {
+        "x": -2047,
+        "y": -143
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig1:prep:perturb",
+      "label": "perturb_field × len(all_redshifts)",
+      "type": "method",
+      "summary": "每个红移一份微扰场；产物名 PerturbedField[]",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:112",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 112,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:orchestrate",
+      "conditional": false,
+      "position": {
+        "x": -1822,
+        "y": -368
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-29T06:13:24.163Z"
+    },
+    {
+      "id": "atlas:fig1:prep:evolve",
+      "label": "evolve_halos（仅 has_discrete_halos）",
+      "type": "method",
+      "summary": "只在离散晕（DEXM-ESF / CHMF-SAMPLER）时执行；产物名 HaloCatalog[]",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:390",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 390,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:prep",
+      "conditional": true,
+      "position": {
+        "x": -1581,
+        "y": -143
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig1:loop",
+      "label": "④ 红移循环（每红移重复，z 由高到低）",
+      "type": "group",
+      "summary": "",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": null,
+      "conditional": false,
+      "position": {
+        "x": -1875,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-25T00:55:57.591Z"
+    },
+    {
+      "id": "atlas:fig1:loop:entry",
+      "label": "每轮入口",
+      "type": "method",
+      "summary": "this_perturbed_field = perturbed_field[iz] + load_all()；仅离散晕时 this_halofield = halofield_list[iz] + load_all()",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:736-737",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 736,
+          "endLine": 737
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:741-742",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 741,
+          "endLine": 742
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": false,
+      "position": {
+        "x": -2499,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-25T02:27:28.501Z"
+    },
+    {
+      "id": "atlas:fig1:loop:halo",
+      "label": "① compute_halo_grid",
+      "type": "method",
+      "summary": "输入：微扰场[iz]、晕目录[iz]、上一红移 Ts·电离（仅 lagrangian 源模型）→ 产出 HaloBox",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_MINI_HALOS",
+        "tag:USE_TS_FLUCT",
+        "tag:Z_HEAT_MAX"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 330,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_MINI_HALOS": [
+          {
+            "label": "USE_MINI_HALOS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 342,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:Z_HEAT_MAX": [
+          {
+            "label": "Z_HEAT_MAX",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 341,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:743",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 743,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:285",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 285,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": true,
+      "position": {
+        "x": -2106,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig1:loop:xray",
+      "label": "② compute_xray_source_field",
+      "type": "method",
+      "summary": "输入：累计 HaloBox 列表 [z, zmax]（仅 USE_TS_FLUCT 且 lagrangian）→ 产出 XraySourceBox",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:HII_DIM",
+        "tag:M_TURN",
+        "tag:N_STEP_TS",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:R_MAX_TS",
+        "tag:USE_MINI_HALOS",
+        "tag:USE_TS_FLUCT",
+        "tag:Z_HEAT_MAX"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 506,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 500,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:M_TURN": [
+          {
+            "label": "M_TURN",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 546,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_STEP_TS": [
+          {
+            "label": "N_STEP_TS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 515,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:R_MAX_TS": [
+          {
+            "label": "R_MAX_TS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 516,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_MINI_HALOS": [
+          {
+            "label": "USE_MINI_HALOS",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 532,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:Z_HEAT_MAX": [
+          {
+            "label": "Z_HEAT_MAX",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 510,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:756",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 756,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:460",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 460,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": true,
+      "position": {
+        "x": -2313,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig1:loop:ts",
+      "label": "③ compute_spin_temperature",
+      "type": "method",
+      "summary": "输入：微扰场、上一红移 TsBox ＋ XrayBox（仅 lagrangian）；仅 USE_TS_FLUCT → 产出 TsBox",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_TS_FLUCT",
+        "tag:Z_HEAT_MAX"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 640,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:Z_HEAT_MAX": [
+          {
+            "label": "Z_HEAT_MAX",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 634,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:763",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 763,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:588",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 588,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": true,
+      "position": {
+        "x": -1679,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T14:30:04.169Z"
+    },
+    {
+      "id": "atlas:fig1:loop:ion",
+      "label": "④ compute_ionization_field",
+      "type": "method",
+      "summary": "无条件执行（每轮必跑）：输入微扰场、TsBox ＋ HaloBox（仅 lagrangian 源模型，否则传 None）＋上一红移电离·微扰场 → 产出 IonizedBox",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_TS_FLUCT",
+        "tag:Z_HEAT_MAX"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          },
+          {
+            "label": "HII_DIM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 739,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 747,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 754,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:Z_HEAT_MAX": [
+          {
+            "label": "Z_HEAT_MAX",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 719,
+              "endLine": null
+            }
+          },
+          {
+            "label": "Z_HEAT_MAX",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 727,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:776",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 776,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:662",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 662,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": false,
+      "position": {
+        "x": -1906,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig1:loop:bt",
+      "label": "⑤ brightness_temperature",
+      "type": "method",
+      "summary": "无条件执行：输入微扰场、TsBox、IonizedBox → 产出 BrightnessTemp",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/single_field.py",
+              "line": 811,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:788",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 788,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "single_field.py:783",
+          "file": "src/py21cmfast/drivers/single_field.py",
+          "line": 783,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": false,
+      "position": {
+        "x": -1457,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-25T13:08:58.923Z"
+    },
+    {
+      "id": "atlas:fig1:loop:assemble",
+      "label": "⑥ Coeval 装配与收尾",
+      "type": "method",
+      "summary": "装配 7 样 / purge 上一轮微扰场 / HaloBox 备下次快照 / 仅在 node_redshifts 上推进 prev_coeval 与 hbox_arr / yield；XraySourceBox 算完立刻 purge(force=True)（coeval.py:774）",
+      "tags": [
+        "tag:HII_DIM"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:800-834",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 800,
+          "endLine": 834
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:loop",
+      "conditional": false,
+      "position": {
+        "x": -1266,
+        "y": -282
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig1:out",
+      "label": "⑤ 输出层",
+      "type": "group",
+      "summary": "",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": null,
+      "conditional": false,
+      "position": {
+        "x": -1868,
+        "y": 44
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-25T00:55:57.591Z"
+    },
+    {
+      "id": "atlas:fig1:out:snapshots",
+      "label": "Coeval 快照 / LightCone 光锥 / GlobalEvolution 全局历史",
+      "type": "artifact",
+      "summary": "每个红移装配一个结果对象；三条流水线各自的容器类型",
+      "tags": [
+        "tag:F_ESC10",
+        "tag:F_STAR10",
+        "tag:HII_EFF_FACTOR",
+        "tag:POP2_ION",
+        "tag:SOURCE_MODEL",
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:F_ESC10": [
+          {
+            "label": "F_ESC10",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 70,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:F_STAR10": [
+          {
+            "label": "F_STAR10",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 69,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_EFF_FACTOR": [
+          {
+            "label": "HII_EFF_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 66,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:POP2_ION": [
+          {
+            "label": "POP2_ION",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 71,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 65,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 132,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:61",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 61,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:49",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 49,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:110",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 110,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:out",
+      "conditional": false,
+      "position": {
+        "x": -2009,
+        "y": 44
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig1:out:cache",
+      "label": "OutputCache 落盘（按 CacheConfig 分类开关）",
+      "type": "method",
+      "summary": "写盘与裁内存由 CacheConfig 决定；每步之后都可能落盘",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "io/caching.py:31",
+          "file": "src/py21cmfast/io/caching.py",
+          "line": 31,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig1"
+      ],
+      "parent": "atlas:fig1:out",
+      "conditional": false,
+      "position": {
+        "x": -1745,
+        "y": 44
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:fig2:e1",
+      "label": "E1 · run_coeval（coeval.py:632，薄壳 :639 → generate_coeval :478）",
+      "type": "group",
+      "summary": "最常用的一条：红移表 → 备料 → 断点续算 → 循环 → yield 过滤",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig1:orchestrate:b",
+      "conditional": false,
+      "position": {
+        "x": -467,
+        "y": -233
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e1:step1",
+      "label": "① 红移表 _get_required_redshifts_coeval",
+      "type": "method",
+      "summary": "决定这次要算哪些红移",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:572",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 572,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e1",
+      "conditional": false,
+      "position": {
+        "x": -833,
+        "y": -299
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e1:step2",
+      "label": "② 备料_setup_ics_and_pfs_for_scrolling",
+      "type": "method",
+      "summary": "三条流水线共用同一份实现",
+      "tags": [
+        "tag:MINIMIZE_MEMORY",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:PHOTONCONS_CALIBRATION_END"
+      ],
+      "tagDetails": {
+        "tag:MINIMIZE_MEMORY": [
+          {
+            "label": "MINIMIZE_MEMORY",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 894,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 863,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 870,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTONCONS_CALIBRATION_END": [
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 871,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 876,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:837",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 837,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e1",
+      "conditional": false,
+      "position": {
+        "x": -837,
+        "y": -168
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:11:49.148Z"
+    },
+    {
+      "id": "atlas:fig2:e1:step3",
+      "label": "③ 断点续算 _obtain_starting_point_for_scrolling",
+      "type": "method",
+      "summary": "从已有缓存里找起点",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:598",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 598,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e1",
+      "conditional": false,
+      "position": {
+        "x": -450,
+        "y": -173
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T14:30:04.169Z"
+    },
+    {
+      "id": "atlas:fig2:e1:step4",
+      "label": "④ 循环_redshift_loop_generator",
+      "type": "method",
+      "summary": "红移循环本体",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:691",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 691,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e1",
+      "conditional": false,
+      "position": {
+        "x": -109,
+        "y": -173
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:28:50.646Z"
+    },
+    {
+      "id": "atlas:fig2:e1:step5",
+      "label": "⑤ yield 过滤 → Coeval 列表",
+      "type": "artifact",
+      "summary": "只交出 out_redshifts 里的那些",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:624",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 624,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e1",
+      "conditional": false,
+      "position": {
+        "x": -111,
+        "y": -299
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig2:e2",
+      "label": "E2 · run_lightcone（lightcone.py:691，薄壳 :698 → generate_lightcone :575）",
+      "type": "group",
+      "summary": "光锥：在同一套循环上每红移切一片",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig1:orchestrate:b",
+      "conditional": false,
+      "position": {
+        "x": -408,
+        "y": 28
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step1",
+      "label": "① lightconer 校验",
+      "type": "method",
+      "summary": "validate_options / _check_desired_arrays_exist",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:644",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 644,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:652",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 652,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": -938,
+        "y": -14
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step2",
+      "label": "② 备料_setup_ics_and_pfs_for_scrolling",
+      "type": "method",
+      "summary": "与 E1 同一份",
+      "tags": [
+        "tag:MINIMIZE_MEMORY",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:PHOTONCONS_CALIBRATION_END"
+      ],
+      "tagDetails": {
+        "tag:MINIMIZE_MEMORY": [
+          {
+            "label": "MINIMIZE_MEMORY",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 894,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 863,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 870,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTONCONS_CALIBRATION_END": [
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 871,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 876,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:837",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 837,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": -655,
+        "y": -16
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:11:56.383Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step3",
+      "label": "③ 建 LightCone setup_lightcone_instance",
+      "type": "variable",
+      "summary": "按 lightconer 规格建容器",
+      "tags": [
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/lightcone.py",
+              "line": 539,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:430",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 430,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": -289,
+        "y": -18
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step4",
+      "label": "④ 断点续算 _obtain_starting_point_for_scrolling",
+      "type": "method",
+      "summary": "与 E1 同一策略",
+      "tags": [
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/lightcone.py",
+              "line": 539,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:443",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 443,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": 61,
+        "y": -20
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step5",
+      "label": "⑤ 循环_redshift_loop_generator",
+      "type": "method",
+      "summary": "红移循环本体",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:691",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 691,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": 61,
+        "y": 74
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:28:37.380Z"
+    },
+    {
+      "id": "atlas:fig2:e2:step6",
+      "label": "⑥ 每红移切片 → LightCone",
+      "type": "artifact",
+      "summary": "make_lightcone_slices",
+      "tags": [
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/lightcone.py",
+              "line": 539,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "lightcone.py:508",
+          "file": "src/py21cmfast/drivers/lightcone.py",
+          "line": 508,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e2",
+      "conditional": false,
+      "position": {
+        "x": -489,
+        "y": 75
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig2:e3",
+      "label": "E3 · run_global_evolution（global_evolution.py:230，唯一不是薄壳的）",
+      "type": "group",
+      "summary": "全局历史：单格演化，最后逐红移取均值",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig1:orchestrate:b",
+      "conditional": false,
+      "position": {
+        "x": -385,
+        "y": 312
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step1",
+      "label": "① SOURCE_MODEL 校验",
+      "type": "method",
+      "summary": "不允许离散晕模型",
+      "tags": [
+        "tag:SOURCE_MODEL"
+      ],
+      "tagDetails": {
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 288,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:285-296",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 285,
+          "endLine": 296
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": -920,
+        "y": 253
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:30:08.874Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step2",
+      "label": "② 单格参数 evolve_input_structs",
+      "type": "variable",
+      "summary": "把网格参数压成一个格子",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:HIRES_TO_LOWRES_FACTOR",
+        "tag:INTEGRATION_METHOD_ATOMIC",
+        "tag:INTEGRATION_METHOD_MINI",
+        "tag:KEEP_3D_VELOCITIES",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_EXP_FILTER",
+        "tag:USE_INTERPOLATION_TABLES",
+        "tag:USE_UPPER_STELLAR_TURNOVER"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 313,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HIRES_TO_LOWRES_FACTOR": [
+          {
+            "label": "HIRES_TO_LOWRES_FACTOR",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_ATOMIC": [
+          {
+            "label": "INTEGRATION_METHOD_ATOMIC",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 317,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_MINI": [
+          {
+            "label": "INTEGRATION_METHOD_MINI",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 318,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:KEEP_3D_VELOCITIES": [
+          {
+            "label": "KEEP_3D_VELOCITIES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 321,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 315,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 322,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 314,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_EXP_FILTER": [
+          {
+            "label": "USE_EXP_FILTER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 320,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_INTERPOLATION_TABLES": [
+          {
+            "label": "USE_INTERPOLATION_TABLES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 316,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_UPPER_STELLAR_TURNOVER": [
+          {
+            "label": "USE_UPPER_STELLAR_TURNOVER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 319,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:309-324",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 309,
+          "endLine": 324
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": -923,
+        "y": 366
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step3",
+      "label": "③ 建容器 GlobalEvolution",
+      "type": "variable",
+      "summary": "装全局历史",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:326-333",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 326,
+          "endLine": 333
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": -628,
+        "y": 369
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step4",
+      "label": "④ 备料_setup_ics_and_pfs_for_scrolling",
+      "type": "method",
+      "summary": "与 E1 同一份",
+      "tags": [
+        "tag:MINIMIZE_MEMORY",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:PHOTONCONS_CALIBRATION_END"
+      ],
+      "tagDetails": {
+        "tag:MINIMIZE_MEMORY": [
+          {
+            "label": "MINIMIZE_MEMORY",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 894,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 863,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 870,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTONCONS_CALIBRATION_END": [
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 871,
+              "endLine": null
+            }
+          },
+          {
+            "label": "PHOTONCONS_CALIBRATION_END",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 876,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:837",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 837,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": -270,
+        "y": 369
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:26:14.530Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step5",
+      "label": "⑤ 循环_redshift_loop_generator",
+      "type": "method",
+      "summary": "红海循环本体（单格）",
+      "tags": [
+        "tag:HII_DIM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:USE_TS_FLUCT"
+      ],
+      "tagDetails": {
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 813,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 796,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/coeval.py",
+              "line": 753,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "coeval.py:691",
+          "file": "src/py21cmfast/drivers/coeval.py",
+          "line": 691,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": 132,
+        "y": 369
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-28T00:26:20.870Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step6",
+      "label": "⑥ 逐红移均值 quantities[q][iz] = mean",
+      "type": "method",
+      "summary": "把单格结果记进时间序列",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:HIRES_TO_LOWRES_FACTOR",
+        "tag:INTEGRATION_METHOD_ATOMIC",
+        "tag:INTEGRATION_METHOD_MINI",
+        "tag:KEEP_3D_VELOCITIES",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_EXP_FILTER",
+        "tag:USE_INTERPOLATION_TABLES",
+        "tag:USE_TS_FLUCT",
+        "tag:USE_UPPER_STELLAR_TURNOVER"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 313,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HIRES_TO_LOWRES_FACTOR": [
+          {
+            "label": "HIRES_TO_LOWRES_FACTOR",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_ATOMIC": [
+          {
+            "label": "INTEGRATION_METHOD_ATOMIC",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 317,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_MINI": [
+          {
+            "label": "INTEGRATION_METHOD_MINI",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 318,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:KEEP_3D_VELOCITIES": [
+          {
+            "label": "KEEP_3D_VELOCITIES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 321,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 315,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 322,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 288,
+              "endLine": null
+            }
+          },
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 314,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_EXP_FILTER": [
+          {
+            "label": "USE_EXP_FILTER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 320,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_INTERPOLATION_TABLES": [
+          {
+            "label": "USE_INTERPOLATION_TABLES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 316,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 299,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 301,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 304,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_UPPER_STELLAR_TURNOVER": [
+          {
+            "label": "USE_UPPER_STELLAR_TURNOVER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 319,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:368",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 368,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": 130,
+        "y": 256
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T13:23:07.741Z"
+    },
+    {
+      "id": "atlas:fig2:e3:step7",
+      "label": "⑦ return → GlobalEvolution",
+      "type": "artifact",
+      "summary": "交回全局历史",
+      "tags": [
+        "tag:BOX_LEN",
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:HIRES_TO_LOWRES_FACTOR",
+        "tag:INTEGRATION_METHOD_ATOMIC",
+        "tag:INTEGRATION_METHOD_MINI",
+        "tag:KEEP_3D_VELOCITIES",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PHOTON_CONS_TYPE",
+        "tag:SOURCE_MODEL",
+        "tag:USE_EXP_FILTER",
+        "tag:USE_INTERPOLATION_TABLES",
+        "tag:USE_TS_FLUCT",
+        "tag:USE_UPPER_STELLAR_TURNOVER"
+      ],
+      "tagDetails": {
+        "tag:BOX_LEN": [
+          {
+            "label": "BOX_LEN",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 313,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HIRES_TO_LOWRES_FACTOR": [
+          {
+            "label": "HIRES_TO_LOWRES_FACTOR",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 310,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_ATOMIC": [
+          {
+            "label": "INTEGRATION_METHOD_ATOMIC",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 317,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:INTEGRATION_METHOD_MINI": [
+          {
+            "label": "INTEGRATION_METHOD_MINI",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 318,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:KEEP_3D_VELOCITIES": [
+          {
+            "label": "KEEP_3D_VELOCITIES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 321,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 315,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PHOTON_CONS_TYPE": [
+          {
+            "label": "PHOTON_CONS_TYPE",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 322,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:SOURCE_MODEL": [
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 288,
+              "endLine": null
+            }
+          },
+          {
+            "label": "SOURCE_MODEL",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 314,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_EXP_FILTER": [
+          {
+            "label": "USE_EXP_FILTER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 320,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_INTERPOLATION_TABLES": [
+          {
+            "label": "USE_INTERPOLATION_TABLES",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 316,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_TS_FLUCT": [
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 299,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 301,
+              "endLine": null
+            }
+          },
+          {
+            "label": "USE_TS_FLUCT",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 304,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_UPPER_STELLAR_TURNOVER": [
+          {
+            "label": "USE_UPPER_STELLAR_TURNOVER",
+            "kind": "赋值",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/drivers/global_evolution.py",
+              "line": 319,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "global_evolution.py:376",
+          "file": "src/py21cmfast/drivers/global_evolution.py",
+          "line": 376,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "atlas-fig2"
+      ],
+      "parent": "atlas:fig2:e3",
+      "conditional": false,
+      "position": {
+        "x": -293,
+        "y": 256
+      },
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T15:17:30.605Z"
+    },
+    {
+      "id": "ic:g-load",
+      "label": "前置（输入 · 种子 · 功率谱）",
+      "type": "group",
+      "summary": "整条链的一次性准备：派生逐线程种子、把宇宙学参数整理成 cosmo_consts 与 P(k)。这些资源在收尾被释放，所以三条链都从这里取依赖，但**只有这一份**（不按链重复）。证据：InitialConditions.c:572（seed_rng_threads，定义 rng.c:30）、:608/:610（两个 k 空间工作盒）、:619（init_ps，定义 cosmology.c:536）。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "41-步骤-①逐线程种子派生srcrngc30-89",
+          "label": "4.1 步骤 ①：逐线程种子派生（src/rng.c:30-89）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [],
+      "parent": "atlas:fig1:prep:ics",
+      "conditional": false,
+      "position": {
+        "x": -222,
+        "y": -376
+      },
+      "createdAt": "2026-09-27T10:20:47.036Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "ic:g-out",
+      "label": "产物与收尾（交付下游 · 资源回收）",
+      "type": "group",
+      "summary": "收束这一层：五个产物交给下游（S10 微扰场与速度），随后回收资源——清 FFTW 线程与计划、释放两个 k 空间工作盒、free_ps()、free_rng_threads()。清理只发生一次，所以它的入边只接**首次出现的那一份**（前置的种子与功率谱、密度链的抽样与实空间化）。证据：:760-770（deallocate）；资源创建处 :572 / :608 / :610 / :619，FFTW 计划首次由 :673 建立。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "15-谁消费已有-ics拿到它才能往下算",
+          "label": "1.5 谁\"消费\"已有 ICs：拿到它才能往下算",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [],
+      "parent": "atlas:fig1:prep:ics",
+      "conditional": false,
+      "position": {
+        "x": 0,
+        "y": 306
+      },
+      "createdAt": "2026-09-27T10:20:47.036Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "ic:vel:proc-sample",
+      "label": "过程③ k 空间高斯抽样",
+      "type": "method",
+      "summary": "逐独立 k 模（只遍历 z 方向一半）取 box(k) = sqrt(V·P(k)/2)·(a + i·b)，a、b 为两个独立标准正态；P(k) 里已含相对速度压制项与 FDM 的 T_F²。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "43-步骤-③k-空间高斯抽样srcinitialconditionsc103-139",
+          "label": "4.3 步骤 ③：k 空间高斯抽样（src/InitialConditions.c:103-139）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0931-sample_ic_modes",
+          "label": "S09.3.1 sample_ic_modes",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-vel",
+      "conditional": false,
+      "position": {
+        "x": -1103,
+        "y": -163
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:vel:proc-conj",
+      "label": "过程④ 共轭对称修正",
+      "type": "method",
+      "summary": "把只填了半空间的 k 盒补成共轭对称：7 个自共轭角点取实部、DC 模置零、再处理两条切片与 i 角点行——保证反变换出来是实场。改动风险高，是纯索引技巧。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "44-步骤-④共轭对称修正srcinitialconditionsc26-101",
+          "label": "4.4 步骤 ④：共轭对称修正（src/InitialConditions.c:26-101）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-vel",
+      "conditional": false,
+      "position": {
+        "x": -819,
+        "y": -163
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:vcb:proc-sample",
+      "label": "过程③ k 空间高斯抽样",
+      "type": "method",
+      "summary": "逐独立 k 模（只遍历 z 方向一半）取 box(k) = sqrt(V·P(k)/2)·(a + i·b)，a、b 为两个独立标准正态；P(k) 里已含相对速度压制项与 FDM 的 T_F²。",
+      "tags": [
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_RELATIVE_VELOCITIES"
+      ],
+      "tagDetails": {
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 539,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 533,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 105,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 535,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 563,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 550,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_RELATIVE_VELOCITIES": [
+          {
+            "label": "USE_RELATIVE_VELOCITIES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 576,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "43-步骤-③k-空间高斯抽样srcinitialconditionsc103-139",
+          "label": "4.3 步骤 ③：k 空间高斯抽样（src/InitialConditions.c:103-139）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "atlas/L3-units.md",
+          "anchor": "s0931-sample_ic_modes",
+          "label": "S09.3.1 sample_ic_modes",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "k 空间高斯抽样（vcb 链复用的同一段）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 103,
+          "endLine": 139
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "outputs.py:576（USE_RELATIVE_VELOCITIES 开启才走这一支）",
+          "file": "src/py21cmfast/wrapper/outputs.py",
+          "line": 576,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-vcb",
+      "conditional": true,
+      "position": {
+        "x": -276,
+        "y": 84
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:vcb:proc-conj",
+      "label": "过程④ 共轭对称修正",
+      "type": "method",
+      "summary": "把只填了半空间的 k 盒补成共轭对称：7 个自共轭角点取实部、DC 模置零、再处理两条切片与 i 角点行——保证反变换出来是实场。改动风险高，是纯索引技巧。",
+      "tags": [
+        "tag:DIM",
+        "tag:HII_DIM",
+        "tag:N_THREADS",
+        "tag:NON_CUBIC_FACTOR",
+        "tag:PERTURB_ALGORITHM",
+        "tag:PERTURB_ON_HIGH_RES",
+        "tag:USE_RELATIVE_VELOCITIES"
+      ],
+      "tagDetails": {
+        "tag:DIM": [
+          {
+            "label": "DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 31,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:HII_DIM": [
+          {
+            "label": "HII_DIM",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 533,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:N_THREADS": [
+          {
+            "label": "N_THREADS",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 55,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:NON_CUBIC_FACTOR": [
+          {
+            "label": "NON_CUBIC_FACTOR",
+            "kind": "入公式",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/src/InitialConditions.c",
+              "line": 32,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ALGORITHM": [
+          {
+            "label": "PERTURB_ALGORITHM",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 563,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:PERTURB_ON_HIGH_RES": [
+          {
+            "label": "PERTURB_ON_HIGH_RES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 550,
+              "endLine": null
+            }
+          }
+        ],
+        "tag:USE_RELATIVE_VELOCITIES": [
+          {
+            "label": "USE_RELATIVE_VELOCITIES",
+            "kind": "开关",
+            "note": "",
+            "ref": {
+              "docId": "",
+              "anchor": "",
+              "label": "",
+              "file": "src/py21cmfast/wrapper/outputs.py",
+              "line": 576,
+              "endLine": null
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "44-步骤-④共轭对称修正srcinitialconditionsc26-101",
+          "label": "4.4 步骤 ④：共轭对称修正（src/InitialConditions.c:26-101）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "共轭对称修正（vcb 链复用的同一段）",
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "line": 26,
+          "endLine": 101
+        },
+        {
+          "docId": "",
+          "anchor": "",
+          "label": "outputs.py:576（USE_RELATIVE_VELOCITIES 开启才走这一支）",
+          "file": "src/py21cmfast/wrapper/outputs.py",
+          "line": 576,
+          "endLine": null
+        }
+      ],
+      "topics": [
+        "ic-density"
+      ],
+      "parent": "ic:g-vcb",
+      "conditional": true,
+      "position": {
+        "x": -56,
+        "y": 84
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "ic:g-dens",
+      "label": "密度链（高分辨密度 · 低分辨密度）",
+      "type": "group",
+      "summary": "从种子与 P(k) 抽样 k 空间高斯场 → 共轭对称修正得到**完整 δ_k** → 反变换得高分辨密度 δ_hires；同一份 δ_k 再经顶帽滤波与采样得低分辨密度 δ_lowres。两条产物在同一条链里，因为它们共用的前缀到 ④ 为止，分歧只在末段（反变换 vs 滤波+采样）。证据：:667-669（抽样与共轭，同时存下完整 δ_k）、:673（dft_c2r_cube）、:702-703/:710/:715-732（滤波与低分辨采样）。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "43-步骤-③k-空间高斯抽样srcinitialconditionsc103-139",
+          "label": "4.3 步骤 ③：k 空间高斯抽样（src/InitialConditions.c:103-139）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [],
+      "parent": "atlas:fig1:prep:ics",
+      "conditional": false,
+      "position": {
+        "x": 637,
+        "y": -145
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "ic:g-vel",
+      "label": "速度链（一阶 ZA · 二阶 2LPT）",
+      "type": "group",
+      "summary": "本链自带一份前缀（抽样与共轭，与原份同名）：从完整 δ_k 出发，k 空间求梯度得 Zel’dovich 速度；再按 Scoccimarro(1998) 附录 D 合成 φ₂ 得二阶位移对应速度。2LPT 会把 φ₂ 写回 δ_k 工作盒（:507），所以它必须排在一阶速度之后。证据：:740（compute_velocity_fields，函数 :299-364，可选滤波 :332）、:751-752（PERTURB_ALGORITHM==2 时才进；compute_velocity_fields_2LPT，函数 :366-544）。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "49-步骤-⑨二阶修正-2lpt可选srcinitialconditionsc366-544",
+          "label": "4.9 步骤 ⑨：二阶修正 2LPT（可选，src/InitialConditions.c:366-544）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [],
+      "parent": "atlas:fig1:prep:ics",
+      "conditional": false,
+      "position": {
+        "x": -808,
+        "y": -104
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "ic:g-vcb",
+      "label": "vcb 链（重子-暗物质相对速度）",
+      "type": "group",
+      "summary": "本链自带一份前缀（抽样与共轭，与原份同名）：对三个方向按 v_i(k)=δ_k·i·k_i/k·sqrt(P_vcb/P)·c_kms 求场，**自己**滤波到低分辨（:198）再反变换（:205）、采样累加三个分量的平方得到 lowres_vcb。只在 USE_RELATIVE_VELOCITIES 时进入（:734）。",
+      "tags": [],
+      "tagDetails": {},
+      "refs": [
+        {
+          "docId": "INITIAL_CONDITIONS.md",
+          "anchor": "48-步骤-⑧相对速度-vcb可选srcinitialconditionsc141-238",
+          "label": "4.8 步骤 ⑧：相对速度 vcb（可选，src/InitialConditions.c:141-238）",
+          "file": "",
+          "line": null,
+          "endLine": null
+        }
+      ],
+      "topics": [],
+      "parent": "atlas:fig1:prep:ics",
+      "conditional": false,
+      "position": {
+        "x": -50,
+        "y": 84
+      },
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    }
+  ],
+  "edges": [
+    {
+      "id": "atlas:e:fig1:entry:cli=>fig1:orchestrate:a",
+      "source": "atlas:fig1:entry:cli",
+      "target": "atlas:fig1:orchestrate:a",
+      "label": "命令行",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:entry:cli=>fig1:orchestrate:b",
+      "source": "atlas:fig1:entry:cli",
+      "target": "atlas:fig1:orchestrate:b",
+      "label": "Python API",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:orchestrate:b=>fig1:orchestrate:setup",
+      "source": "atlas:fig1:orchestrate:b",
+      "target": "atlas:fig1:orchestrate:setup",
+      "label": "调用",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:orchestrate:setup=>fig1:prep:ics",
+      "source": "atlas:fig1:orchestrate:setup",
+      "target": "atlas:fig1:prep:ics",
+      "label": "备料",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:prep:ics=>fig1:prep:photoncons",
+      "source": "atlas:fig1:prep:ics",
+      "target": "atlas:fig1:prep:photoncons",
+      "label": "ICs",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:prep:photoncons=>fig1:prep:perturb",
+      "source": "atlas:fig1:prep:photoncons",
+      "target": "atlas:fig1:prep:perturb",
+      "label": "校准曲线",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:prep:perturb=>fig1:prep:evolve",
+      "source": "atlas:fig1:prep:perturb",
+      "target": "atlas:fig1:prep:evolve",
+      "label": "晕目录[]",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:prep:perturb=>fig1:loop:entry",
+      "source": "atlas:fig1:prep:perturb",
+      "target": "atlas:fig1:loop:entry",
+      "label": "微扰场[iz]",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:prep:evolve=>fig1:loop:entry",
+      "source": "atlas:fig1:prep:evolve",
+      "target": "atlas:fig1:loop:entry",
+      "label": "晕目录[iz]",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:entry=>fig1:loop:halo",
+      "source": "atlas:fig1:loop:entry",
+      "target": "atlas:fig1:loop:halo",
+      "label": "微扰场[iz]",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:halo=>fig1:loop:xray",
+      "source": "atlas:fig1:loop:halo",
+      "target": "atlas:fig1:loop:xray",
+      "label": "HaloBox",
+      "type": "depends_on",
+      "directed": true,
+      "note": "条件性数据流（只在特定配置下成立）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:xray=>fig1:loop:ts",
+      "source": "atlas:fig1:loop:xray",
+      "target": "atlas:fig1:loop:ts",
+      "label": "XrayBox",
+      "type": "depends_on",
+      "directed": true,
+      "note": "条件性数据流（只在特定配置下成立）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:ts=>fig1:loop:bt",
+      "source": "atlas:fig1:loop:ts",
+      "target": "atlas:fig1:loop:bt",
+      "label": "TsBox",
+      "type": "depends_on",
+      "directed": true,
+      "note": "条件性数据流（只在特定配置下成立）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:halo=>fig1:loop:ion",
+      "source": "atlas:fig1:loop:halo",
+      "target": "atlas:fig1:loop:ion",
+      "label": "HaloBox",
+      "type": "depends_on",
+      "directed": true,
+      "note": "条件性数据流（只在特定配置下成立）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:ion=>fig1:loop:bt",
+      "source": "atlas:fig1:loop:ion",
+      "target": "atlas:fig1:loop:bt",
+      "label": "IonizedBox",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:bt=>fig1:loop:assemble",
+      "source": "atlas:fig1:loop:bt",
+      "target": "atlas:fig1:loop:assemble",
+      "label": "BrightnessTemp",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:loop:assemble=>fig1:out:snapshots",
+      "source": "atlas:fig1:loop:assemble",
+      "target": "atlas:fig1:out:snapshots",
+      "label": "每红移一个 Coeval",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig1:out:snapshots=>fig1:out:cache",
+      "source": "atlas:fig1:out:snapshots",
+      "target": "atlas:fig1:out:cache",
+      "label": "按 CacheConfig",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.817Z"
+    },
+    {
+      "id": "atlas:e:fig2:e1:step1=>fig2:e1:step2",
+      "source": "atlas:fig2:e1:step1",
+      "target": "atlas:fig2:e1:step2",
+      "label": "红移表",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e1:step2=>fig2:e1:step3",
+      "source": "atlas:fig2:e1:step2",
+      "target": "atlas:fig2:e1:step3",
+      "label": "ICs / 微扰场",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e1:step3=>fig2:e1:step4",
+      "source": "atlas:fig2:e1:step3",
+      "target": "atlas:fig2:e1:step4",
+      "label": "起始 iz",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e1:step4=>fig2:e1:step5",
+      "source": "atlas:fig2:e1:step4",
+      "target": "atlas:fig2:e1:step5",
+      "label": "Coeval",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e2:step1=>fig2:e2:step2",
+      "source": "atlas:fig2:e2:step1",
+      "target": "atlas:fig2:e2:step2",
+      "label": "校验结果",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e2:step2=>fig2:e2:step3",
+      "source": "atlas:fig2:e2:step2",
+      "target": "atlas:fig2:e2:step3",
+      "label": "ICs / 微扰场",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e2:step3=>fig2:e2:step4",
+      "source": "atlas:fig2:e2:step3",
+      "target": "atlas:fig2:e2:step4",
+      "label": "LightCone",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e2:step4=>fig2:e2:step5",
+      "source": "atlas:fig2:e2:step4",
+      "target": "atlas:fig2:e2:step5",
+      "label": "起始 iz",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e2:step5=>fig2:e2:step6",
+      "source": "atlas:fig2:e2:step5",
+      "target": "atlas:fig2:e2:step6",
+      "label": "每红移切片",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step1=>fig2:e3:step2",
+      "source": "atlas:fig2:e3:step1",
+      "target": "atlas:fig2:e3:step2",
+      "label": "source_model",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step2=>fig2:e3:step3",
+      "source": "atlas:fig2:e3:step2",
+      "target": "atlas:fig2:e3:step3",
+      "label": "单格参数",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step3=>fig2:e3:step4",
+      "source": "atlas:fig2:e3:step3",
+      "target": "atlas:fig2:e3:step4",
+      "label": "GlobalEvolution",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step4=>fig2:e3:step5",
+      "source": "atlas:fig2:e3:step4",
+      "target": "atlas:fig2:e3:step5",
+      "label": "ICs / 微扰场",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step5=>fig2:e3:step6",
+      "source": "atlas:fig2:e3:step5",
+      "target": "atlas:fig2:e3:step6",
+      "label": "单格结果",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "atlas:e:fig2:e3:step6=>fig2:e3:step7",
+      "source": "atlas:fig2:e3:step6",
+      "target": "atlas:fig2:e3:step7",
+      "label": "时间序列",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T08:57:33.886Z",
+      "updatedAt": "2026-09-24T09:01:49.818Z"
+    },
+    {
+      "id": "ic:e01",
+      "source": "ic:art-inputs",
+      "target": "ic:proc-seed",
+      "label": "提供 random_seed",
+      "type": "depends_on",
+      "directed": true,
+      "note": "主函数签名只有 random_seed 与结构体两个入参。",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-21T11:33:30.815Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "ic:e02",
+      "source": "ic:art-inputs",
+      "target": "ic:proc-ps",
+      "label": "提供 DIM / BOX_LEN / 功率谱开关",
+      "type": "depends_on",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-21T11:33:30.815Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-seed=>proc-sample:art-seeds",
+      "source": "ic:proc-seed",
+      "target": "ic:proc-sample",
+      "label": "种子池",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜逐线程种子池」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-ps=>proc-sample:art-pk",
+      "source": "ic:proc-ps",
+      "target": "ic:proc-sample",
+      "label": "cosmo_consts 与 P(k)",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜cosmo_consts 与 P(k)」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-sample=>proc-conj:art-dk",
+      "source": "ic:proc-sample",
+      "target": "ic:proc-conj",
+      "label": "δ_k（半空间）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜δ_k 高斯实现（半空间）」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-conj=>proc-realize:art-dkfull",
+      "source": "ic:proc-conj",
+      "target": "ic:proc-realize",
+      "label": "δ_k（完整）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜δ_k 完整实现（共轭补全后）」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-conj=>proc-lowres:art-dkfull",
+      "source": "ic:proc-conj",
+      "target": "ic:proc-lowres",
+      "label": "δ_k（完整）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-realize=>proc-downstream:art-hires",
+      "source": "ic:proc-realize",
+      "target": "ic:proc-downstream",
+      "label": "δ_hires（高分辨密度）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜hires_density 高分辨密度」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-lowres=>proc-downstream:art-lowres",
+      "source": "ic:proc-lowres",
+      "target": "ic:proc-downstream",
+      "label": "δ_lowres（低分辨密度）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜lowres_density 低分辨密度」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-seed=>vel-proc-sample:art-seeds",
+      "source": "ic:proc-seed",
+      "target": "ic:vel:proc-sample",
+      "label": "种子池",
+      "type": "derives_from",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-ps=>vel-proc-sample:art-pk",
+      "source": "ic:proc-ps",
+      "target": "ic:vel:proc-sample",
+      "label": "cosmo_consts 与 P(k)",
+      "type": "derives_from",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:vel-proc-sample=>vel-proc-conj:art-dk",
+      "source": "ic:vel:proc-sample",
+      "target": "ic:vel:proc-conj",
+      "label": "δ_k（半空间）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:vel-proc-conj=>proc-v1:art-dkfull",
+      "source": "ic:vel:proc-conj",
+      "target": "ic:proc-v1",
+      "label": "δ_k（完整）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:vel-proc-conj=>proc-2lpt-phi:art-dkfull",
+      "source": "ic:vel:proc-conj",
+      "target": "ic:proc-2lpt-phi",
+      "label": "δ_k（完整）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 PERTURB_ALGORITHM == \"2LPT\" 时执行（C: InitialConditions.c:751；Python: outputs.py:563）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-2lpt-phi=>proc-2lpt-v:art-phi2",
+      "source": "ic:proc-2lpt-phi",
+      "target": "ic:proc-2lpt-v",
+      "label": "∇²φ₂（k 空间场）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 PERTURB_ALGORITHM == \"2LPT\" 时执行（C: InitialConditions.c:751；Python: outputs.py:563）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-v1=>proc-downstream:art-v1",
+      "source": "ic:proc-v1",
+      "target": "ic:proc-downstream",
+      "label": "ZA 速度 vx / vy / vz",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜一阶速度 vx / vy / vz」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-2lpt-v=>proc-downstream:art-2lpt",
+      "source": "ic:proc-2lpt-v",
+      "target": "ic:proc-downstream",
+      "label": "2LPT 速度",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 PERTURB_ALGORITHM == \"2LPT\" 时执行（C: InitialConditions.c:751；Python: outputs.py:563）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-seed=>vcb-proc-sample:art-seeds",
+      "source": "ic:proc-seed",
+      "target": "ic:vcb:proc-sample",
+      "label": "种子池",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 USE_RELATIVE_VELOCITIES 开启时成立（C: InitialConditions.c:734；Python: outputs.py:576）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-ps=>vcb-proc-sample:art-pk",
+      "source": "ic:proc-ps",
+      "target": "ic:vcb:proc-sample",
+      "label": "cosmo_consts 与 P(k)",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 USE_RELATIVE_VELOCITIES 开启时成立（C: InitialConditions.c:734；Python: outputs.py:576）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:vcb-proc-sample=>vcb-proc-conj:art-dk",
+      "source": "ic:vcb:proc-sample",
+      "target": "ic:vcb:proc-conj",
+      "label": "δ_k（半空间）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 USE_RELATIVE_VELOCITIES 开启时成立（C: InitialConditions.c:734；Python: outputs.py:576）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:vcb-proc-conj=>proc-vcb:art-dkfull",
+      "source": "ic:vcb:proc-conj",
+      "target": "ic:proc-vcb",
+      "label": "δ_k（完整）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 USE_RELATIVE_VELOCITIES 开启时成立（C: InitialConditions.c:734；Python: outputs.py:576）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-27T13:13:22.867Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-vcb=>proc-downstream:art-vcb",
+      "source": "ic:proc-vcb",
+      "target": "ic:proc-downstream",
+      "label": "lowres_vcb（相对速度）",
+      "type": "derives_from",
+      "directed": true,
+      "note": "仅 USE_RELATIVE_VELOCITIES 开启时成立（C: InitialConditions.c:734；Python: outputs.py:576）；它会把 POWER_SPECTRUM 设为 CLASS（inputs.py:575-579）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": true,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-28T03:39:19.993Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-seed=>proc-cleanup:art-seeds",
+      "source": "ic:proc-seed",
+      "target": "ic:proc-cleanup",
+      "label": "种子池",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜逐线程种子池」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-ps=>proc-cleanup:art-pk",
+      "source": "ic:proc-ps",
+      "target": "ic:proc-cleanup",
+      "label": "功率谱表",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜cosmo_consts 与 P(k)」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-sample=>proc-cleanup:art-dk",
+      "source": "ic:proc-sample",
+      "target": "ic:proc-cleanup",
+      "label": "两个 k 空间工作盒",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜δ_k 高斯实现（半空间）」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    },
+    {
+      "id": "atlas:e:flow:proc-realize=>proc-cleanup:art-saved",
+      "source": "ic:proc-realize",
+      "target": "ic:proc-cleanup",
+      "label": "FFTW 计划缓存",
+      "type": "derives_from",
+      "directed": true,
+      "note": "产物「产物｜δ_k 只读副本 HIRES_box_saved」的流向（重构脚本由产物节点合并而来）",
+      "sourcePort": null,
+      "targetPort": null,
+      "conditional": false,
+      "createdAt": "2026-09-24T15:17:30.605Z",
+      "updatedAt": "2026-09-27T13:13:22.867Z"
+    }
+  ]
+}
