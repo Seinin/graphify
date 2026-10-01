@@ -32,9 +32,12 @@ Render → **New** → **Web Service**，填写：
 | 配置项 | 值 |
 | :--- | :--- |
 | Runtime | `Node` |
-| Build Command | `npm ci && npm run build` |
+| Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `node server/index.mjs` |
 | Health Check Path | `/api/health` |
+
+> `--include=dev` **不能省略**。下面的 `NODE_ENV=production` 在构建期同样生效，会让 `npm ci`
+> 跳过 devDependencies，而 `vite` / `typescript` 都在 devDependencies 里，构建会直接失败。
 
 环境变量：
 
