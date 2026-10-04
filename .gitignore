@@ -14,3 +14,13 @@ data/history/
 
 # 写前备份（不入库）
 *.bak
+
+# 源码索引里混入的构建产物与本地私有文件（上游不跟踪，副本也不收）
+code/**/__pycache__/
+code/**/*.pyc
+code/**/*.o
+code/**/*.so
+code/**/*.gif
+code/**/*.png
+code/scripts/test.py
+code/src/py21cmfast/_version.py
