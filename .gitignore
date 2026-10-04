@@ -11,3 +11,6 @@ data/history/
 *.local
 
 .DS_Store
+
+# 写前备份（不入库）
+*.bak

@@ -21,16 +21,25 @@ export const EDGE_COLOR = '#7C8798'
 export const EDGE_LABEL_COLOR = '#475569'
 export const EDGE_LABEL_OUTLINE_COLOR = '#FFFFFF'
 
-/** 层级连线：最轻的一档，只表达「父 → 直系子节点」的细分关系 */
-export const HIERARCHY_EDGE_COLOR = '#C7CEDA'
+/**
+ * **对外输入**（灰显的上下文）：进到某个块的子图里时，块外指进来的量、以及通向它的那条边。
+ *
+ * 节点描边与连线共用这一档灰；节点的填充与文字另有一档更深的 `CONTEXT_NODE_COLOR`。
+ * 原先这两个值在 `styles.ts` 里以字面量重复出现（描边 / 线色 / 文字各一遍），
+ * 图例要列「对外输入」这一档时必须与它们同源，所以提到这里来。
+ */
+export const CONTEXT_EDGE_COLOR = '#94A3B8'
+export const CONTEXT_NODE_COLOR = '#64748B'
 
 /**
- * **跨层捷径**连线（物理链页专用）。
+ * **提供 / 数据流动**连线（物理链页专用）：跳层的那条依赖。
  *
  * 物理链按"到终点的最长路径"分层，于是**骨干树上的边层差恒为 1**；不在最长路径上的真实依赖
  * （一个量有好几个上游，或直连到旁路诊断出口）必然跨层。这些边不能删——它们是真实的公式依赖，
- * 删掉就是篡改物理——所以照画，但用**这一档颜色 + 点线 + 弧线**和骨干边区分开：
+ * 删掉就是篡改物理——所以照画，但用**这一档颜色 + 弧线**和骨干边区分开：
  * 看到弧线就知道"这条箭头跳过了几层"，而不是以为树的层级画错了。
+ * **线型是实线**：这张画布上虚线只有一个含义——条件 / 可选（`conditional` / `relates_to`），
+ * 这一档讲的是"跳了几层"、不是"有时才有"，所以线型不参与表达，区分只靠弧线与颜色。
  * 取紫灰（比语义关系灰更冷、比分层灰更深），与「条件虚线」用的灰、`contradicts` 用的琥珀都不同族。
  */
 export const CROSS_LINK_COLOR = '#8B7FD4'
@@ -38,11 +47,11 @@ export const CROSS_LINK_COLOR = '#8B7FD4'
 /**
  * **跨红移回流**连线（物理链页专用）。
  *
- * 与「跨层捷径」是两种跨法：捷径跳的是**链条深度**（仍在同一轮内），回流跨的是**迭代**
+ * 与「提供 / 数据流动」是两种跨法：那一档跳的是**链条深度**（仍在同一轮内），回流跨的是**迭代**
  * ——下一轮指回上一轮（`previous_spin_temp` / `previous_ionize_box`），方向与自上而下的主序相反。
  * 两者不能共用一档颜色，否则"跨了几层"与"跨了一轮"会被读成同一件事。
  *
- * 取品红一档：比跨层捷径的紫灰更饱和、更暗（在白底上对比度更高），与语义关系的灰、
+ * 取品红一档：比「提供 / 数据流动」的紫灰更饱和、更暗（在白底上对比度更高），与语义关系的灰、
  * 分层连线的浅灰、`contradicts` 的琥珀、`SNAP_COLOR` 的靛都不撞；红点（`TAG_DOT_COLOR`）
  * 虽同为暖色，但它是节点角上的小圆点、且色相更偏红，不会与一条长划虚线混认。
  */
@@ -57,6 +66,91 @@ export const SELECTION_BOX_COLOR = '#4F46E5'
 
 /** 语义关系中的特殊类型色 */
 export const CONTRADICTS_COLOR = '#D97706'
+
+/**
+ * 画布上可能出现的一条连线的**线型档**。它不是数据字段，而是"画出来长什么样"的分档：
+ * 同一个数据字段（`conditional` / `crossLink` / `spanKind` / `directed`）落在哪一档，
+ * 由渲染器按**元素此刻带着的类名与属性**判（见 `cytoscapeSetup.ts` 的 `edgeStyleOf`）。
+ *
+ * 为什么要分档而不是直接用边类型：图例要讲的是"这一条线画成什么样、是什么关系"，
+ * 而画布上同一档样式可能对应多种数据来源（比如「主序依赖」既收 `depends_on` 也收 `derives_from`）。
+ */
+export type EdgeStyleId =
+  /** 主序依赖（物理链页叫「同一红移内的数据流」）：灰实线 + 箭头 */
+  | 'flow'
+  /** 无向关系：灰实线，不画箭头 */
+  | 'undirected'
+  /** 相关：灰虚线 */
+  | 'relates_to'
+  /** 相斥：琥珀点线 */
+  | 'contradicts'
+  /** 条件 / 可选：灰虚线（线型与「相关」同，但一档是一类语义） */
+  | 'conditional'
+  /** 提供 / 数据流动（物理链页）：紫灰实线弧，跳层的那条依赖 */
+  | 'cross-link'
+  /** 跨红移回流（物理链页）：品红长划虚线弧，跟随开关显隐 */
+  | 'feedback'
+  /** 对外输入：灰细线，块子图里从块外指进来的那条 */
+  | 'context'
+
+export interface EdgeStyleLegendEntry {
+  label: string
+  /**
+   * 线色。**必须是 `styles.ts` 那一档同用的常量**，不要在这里另写一个 hex——
+   * 图例与画布各写一套色值是这块曾经的病（图例画灰实线、画布上却是琥珀点线）。
+   */
+  color: string
+  /** 线样式，与样式表里那一档的 `line-style` 同口径（`solid` 是 cytoscape 的缺省） */
+  kind: 'solid' | 'dashed' | 'dotted' | 'long-dash'
+  /** 画不画箭头（无向关系不画） */
+  arrow: boolean
+  /** 线宽，与样式表同一档 */
+  width: number
+  /** 弧线：提供 / 数据流动与跨红移回流都鼓开一格，读作「绕过去」而不是「树脊」 */
+  curve?: boolean
+}
+
+/**
+ * 线型 → 图例条目的**单一来源**：图例按这张表画样例线段，条目集合则由画布此刻真画出来的线型决定。
+ * 表里的色值与线宽就是样式表那一档的取值（同一个常量），样式表改一处、图例跟着变。
+ *
+ * 顺序即图例里的排列顺序：先常规语义关系，再物理链页那几档跨法，最后是对外输入。
+ */
+export const EDGE_STYLE_ORDER: EdgeStyleId[] = [
+  'flow',
+  'undirected',
+  'relates_to',
+  'contradicts',
+  'conditional',
+  'cross-link',
+  'feedback',
+  'context',
+]
+
+export const EDGE_STYLE_LEGEND: Record<EdgeStyleId, EdgeStyleLegendEntry> = {
+  flow: { label: '数据流（依赖）', color: EDGE_COLOR, kind: 'solid', arrow: true, width: 1.4 },
+  undirected: { label: '无向关系', color: EDGE_COLOR, kind: 'solid', arrow: false, width: 1.4 },
+  relates_to: { label: '相关', color: EDGE_COLOR, kind: 'dashed', arrow: true, width: 1.4 },
+  contradicts: { label: '相斥', color: CONTRADICTS_COLOR, kind: 'dotted', arrow: true, width: 1.4 },
+  conditional: { label: '条件 / 可选', color: EDGE_COLOR, kind: 'dashed', arrow: true, width: 1.5 },
+  'cross-link': { label: '提供 / 数据流动', color: CROSS_LINK_COLOR, kind: 'solid', arrow: true, width: 1.3, curve: true },
+  feedback: { label: '跨红移回流', color: FEEDBACK_COLOR, kind: 'long-dash', arrow: true, width: 2, curve: true },
+  context: { label: '对外输入', color: CONTEXT_EDGE_COLOR, kind: 'solid', arrow: true, width: 1.2 },
+}
+
+/**
+ * 图例样例线段的 SVG 虚线节奏。
+ *
+ * 与样式表的关系：长划那一档是样式表里显式写的 `line-dash-pattern: [10, 5]`，逐字一致；
+ * `dashed` / `dotted` 两档在样式表里用的是 cytoscape 内建的线型名（节奏由引擎定），
+ * 这里给的是画得出来的近似节奏——**读的是"虚线还是点线"这件事**，不是像素级复刻。
+ */
+export const EDGE_STYLE_DASH: Record<EdgeStyleLegendEntry['kind'], string | undefined> = {
+  solid: undefined,
+  dashed: '5 3.5',
+  dotted: '1 2.6',
+  'long-dash': '10 5',
+}
 
 /**
  * 大框（容器节点）配色：浅底 + 同色虚线描边，标题贴在左上角。
@@ -109,7 +203,7 @@ export const TAG_DOT_INSET = 3
  * 也刻意避开明细块里"出处"链接的青色（`text-cyan-700`）与画布红点的玫红，
  * 免得让人以为"面板里的色 = 画布上的那个点"。
  *
- * `group` 为空归「未分类」，用中性灰兜底——那是"没归类"，不是第五个类别。
+ * 不在表里的 `group`（「非模型参数」、空）一律中性灰兜底——那是"没归类"，不是又一个类别。
  *
  * 数据侧：`data/graph.json` 里标签的 `color` 由 `scripts/color-tags.mjs` 按**同一张表** seed
  * （那个脚本是 .mjs，直接 import 不了本文件，所以抄了一份 hex，末尾注释指回这里）；
@@ -124,6 +218,14 @@ export const TAG_GROUP_COLORS: Record<string, string> = {
 
 /** 未分类（`group` 为空或没登记过）的兜底色 */
 export const TAG_GROUP_FALLBACK_COLOR = '#4B5563'
+
+/**
+ * 类别名的人话：`SimulationOptions` → `Simulation Options`，数据里的类名一个字不动。
+ * 空分类显示「未分类」。顶栏标签弹层与右侧属性面板用**同一份**——两处各写一套迟早会漂。
+ */
+export function tagGroupLabel(group: string): string {
+  return (group || '未分类').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+}
 
 /**
  * 标签的类别色：**标签自己的 `color` → 按 `group` 派生 → 兜底**。

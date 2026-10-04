@@ -27,6 +27,7 @@ import { DEFAULT_LAYOUT_KIND, type LayoutKind } from './graph/layout'
 import { buildHierarchy, tabVisibleIds } from './graph/hierarchy'
 import { graphTopics, topicVisibility, topicVisibilityFingerprint, type TopicVisibility } from './lib/topics'
 import { CHAIN_GRAPH, ENGINEERING_LABEL, chainStats, isEngineeringObject } from './lib/physicsChain'
+import { chainLayoutDirty, useChainLayoutStore } from './state/chainLayoutStore'
 import { codeRefLocation, descendantIdsOf, isCodeRef, type GraphRef, type NodePosition } from './lib/types'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -93,15 +94,12 @@ export default function App() {
     anchor: null,
   })
   /**
-   * 应用内视图：`canvas` = 工程视角图谱（data/graph.json，画布那套）；
-   * 物理视角那一页（论文的物理链）正在重建，回来时在这里加一个取值。
-   * 初值取自 `?view=matrix`，可分享、刷新不丢。
+   * 视图。对外只有物理链一页，所以初值写死 `chain`：打开站点即物理链页。
+   * 画布视图（工程视角）已不对外开放（见 change graphify-chain-only-entry），URL 也不能把它打开——
+   * 初值不读 `?view=`，下面的同步分支只写 `view=chain`。
+   * `setView` 仍留给顶栏的分段控件（把 `canvas` 加回 `VIEWS` 时控件会自动出现）。
    */
-  /**
-   * 视图。目前只有画布一页（`GraphView` 仍是联合类型，物理视角页重建后在这里加取值即可）；
-   * `setView` 留给顶栏的分段控件，控件按"多于一项"才渲染。
-   */
-  const [view, setView] = useState<GraphView>('canvas')
+  const [view, setView] = useState<GraphView>('chain')
   /** 源码预览抽屉：与 notes 阅读器并列的另一个「读原文」出口 */
   const [codeViewer, setCodeViewer] = useState<{
     open: boolean
@@ -252,7 +250,8 @@ export default function App() {
     setChainSelection(null)
   }, [view, select])
 
-  // 当前标签页与视图同步到 URL（?g=<focusId>、?view=matrix）：复制链接可还原现场
+  // 当前标签页与视图同步到 URL（?g=<focusId>、?view=chain）：复制链接可还原现场。
+  // `view` 只会是 chain（画布不对外），所以旧链接里的 `?view=canvas` 进来会被就地改正
   useEffect(() => {
     const url = new URL(window.location.href)
     if (activeFocusId) url.searchParams.set('g', activeFocusId)
@@ -624,17 +623,30 @@ export default function App() {
     if (edgeDialog.edgeId) sync.patchEdge(edgeDialog.edgeId, values)
   }
 
+  /**
+   * 物理链页的保存状态（`state/chainLayoutStore`）：这一页保存的是**手动摆放**，
+   * 与画布那张图无关，所以顶栏那颗按钮在这一页显示、保存的都换成它这一份。
+   */
+  const saveChainLayout = useChainLayoutStore((state) => state.save)
+  const chainSaveState = useChainLayoutStore((state) => state.saveState)
+  const chainLastSavedAt = useChainLayoutStore((state) => state.lastSavedAt)
+  const chainLayoutIsDirty = useChainLayoutStore(chainLayoutDirty)
+
   /* ---------------- 快捷键 ---------------- */
 
   /*
-    快捷键只在画布视图注册（见 change graphify-matrix-view-isolation）。
-    矩阵页的选中状态已被清空，键盘却还按「看不见的选中」工作——在矩阵页按 Delete
-    就是删掉一个用户根本看不见的节点。跨视图动作（另存、帮助）两种视图都保留。
+    画布专属的快捷键只在画布视图注册（见 change graphify-matrix-view-isolation）：
+    物理链页的选中是那一页自己的本地状态，键盘却还按「看不见的选中」工作——在那里按
+    Delete 就是删掉一个用户根本看不见的节点。
+
+    保存按页分流：画布页保存那张图（写回工作文件、归档整图），物理链页保存这一页的手动摆放
+    （`data/chain-layout.json`，见 `state/chainLayoutStore`）——两边都真写盘，界面报什么就存什么。
+    画布不对外可达之后，真正跨视图的动作只剩帮助。
   */
   useKeyboard(
     view !== 'canvas'
       ? {
-          onSave: sync.saveNow,
+          onSave: saveChainLayout,
           onToggleHelp: () => setHelpOpen((prev) => !prev),
         }
       : {
@@ -728,7 +740,14 @@ export default function App() {
           onClearActiveTags={() => setActiveTags([])}
           onOpenImport={() => setImportOpen(true)}
           onOpenHistory={() => setHistoryOpen(true)}
-          onSave={sync.saveNow}
+          // 保存跟着视图走：画布页存那张图，物理链页存这一页的手动摆放
+          onSave={view === 'chain' ? saveChainLayout : sync.saveNow}
+          saveStatus={
+            view === 'chain'
+              ? { saveState: chainSaveState, dirty: chainLayoutIsDirty, lastSavedAt: chainLastSavedAt }
+              : undefined
+          }
+          saveHint={view === 'chain' ? '保存这一页的手动摆放 (Ctrl/Cmd + S)' : undefined}
           onRename={renameGraph}
           activeTabLabel={activeTabLabel}
           onToggleHelp={() => setHelpOpen(true)}

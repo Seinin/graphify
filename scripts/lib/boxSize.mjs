@@ -14,8 +14,23 @@
 export const NODE_FONT_SIZE = 13
 export const GROUP_TITLE_FONT_SIZE = 18
 export const GROUP_PADDING = 14
+/**
+ * **有子节点的容器**在子节点之外还要占的一圈（模型单位，四边各一份）：段与段之间按它让位。
+ *
+ * 与画布同源：容器一旦有子节点就命中样式表的 `node:parent` 规则（它写在 `node.container` 之后），
+ * 它的 `padding: 26` 覆盖 `node.container` 里声明的 `GROUP_PADDING`(14)——空框外扩 14、装了块的框
+ * 外扩 26。叠段若只按块高让位，两段的框会在纵向压进来（实测压掉 45.6，框线切过邻段的块）。
+ * 改这里要同步 `src/graph/styles.ts` 的 `node:parent`。
+ */
+export const FRAME_PADDING = 26
 /** 行高与字号的比值（与 cytoscape 的默认行高一致） */
 export const LINE_HEIGHT_RATIO = 1.2
+/**
+ * 画布上的块比模型高出来的一档：模块的名字后面还画着「 · 直系子节点数」徽标（`.branch`），
+ * 多折一行。尺寸模型只量名字，所以叠段时替这一行一起留位（实测十二个块一律高 16 = 13 × 1.2）。
+ * 名字末行还有富余、徽标不另起行的那一块只是框距比 `GAP` 宽一点，不会贴在一起。
+ */
+export const BADGE_LINE = Math.round(NODE_FONT_SIZE * LINE_HEIGHT_RATIO)
 
 /** 方框左右内边距之和 / 上下内边距之和 / 宽度区间 / 单行最小高度（同 labels.ts） */
 const BOX_PADDING_X = 20

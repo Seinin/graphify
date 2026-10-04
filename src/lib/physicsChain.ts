@@ -30,6 +30,10 @@ export interface CodeSite {
   unit?: string
   unitName?: string
   fileWide?: boolean
+  /** 落点出处：真源核定（`chain`）还是 atlas 回落（`atlas`） */
+  source?: 'chain' | 'atlas'
+  /** 该行区间内必须出现的代码标识（真源核定时给出，自检按它复核区间是不是核心行） */
+  needles?: string[]
 }
 
 export interface ChainChoice {
@@ -53,7 +57,8 @@ export interface ChainNode {
   nature?: ChainNature
   sections?: string[]
   codeHints?: string[]
-  code?: { count: number; sites: CodeSite[] }
+  /** `pending` = 待核定核心行的文件名清单（atlas 找不到函数体，不许拿"整文件"充数） */
+  code?: { count: number; sites: CodeSite[]; pending?: string[] }
   choices?: ChainChoice[]
   theory?: string
   surfaceNote?: string
@@ -79,7 +84,6 @@ export interface ChainParam {
   paper?: string
   switch?: boolean
   gatesEdges?: string[]
-  basis?: string
   inCode?: boolean
   group?: string
   choices?: string[]
@@ -98,18 +102,24 @@ interface ChainGraphNode {
   label: string
   type: string
   summary?: string
+  /**
+   * **摘要位置的公式**（排版的 LaTeX）：生成器从真源 `docText[id].formula` 逐字转录。
+   * 块与层里的文件成员不带它——视图见不到这个字段就照旧走摘要输入框那条路
+   * （判据落在数据上，`Inspector` 不按种类另写一份名单）。
+   */
+  formula?: string
   parent?: string
   topics?: string[]
   tags?: string[]
   /** 块节点（`type: 'process'` 的**普通**节点，不是容器）上的一级划分事实 */
   blockKind?: 'process' | 'layer'
-  /** 块在主序里的位次（真源手写，只决定 y 坐标，不携带逻辑含义）；两个层都是 0 */
+  /** 块在主序里的位次（真源手写，只决定 y 坐标，不携带逻辑含义）；层是 0 */
   order?: number
-  /** 块下辖的成员条数（含层里的**文件**成员） */
+  /** 块下辖的成员条数 */
   memberCount?: number
-  /** 成员里**物理量**的条数（L1 的 16 个头文件不算 → 0） */
+  /** 成员里**物理量**的条数（块里只有物理量，与 `memberCount` 相等） */
   quantityMemberCount?: number
-  /** 能不能进去看：**过程块**才有子图可进；两个层（L0 / L1）一定不可进入 */
+  /** 能不能进去看：**过程块**才有子图可进；层一定不可进入 */
   enterable?: boolean
   /**
    * 代码阶段号（如 `S14`），**已是普通属性、不再决定分层**：一级怎么划分看 `blocks.items`。
@@ -184,7 +194,7 @@ export interface ChainBlock {
 interface ChainGraph {
   nodes: ChainGraphNode[]
   edges: ChainGraphEdge[]
-  /** 一级划分（12 个块）的完整事实 + 口径数字 */
+  /** 一级划分（11 个块）的完整事实 + 口径数字 */
   blocks?: { items: ChainBlock[]; stats: Record<string, number> }
   /** 块内的模块 → 它内部的步骤（块自己不在里面：块的成员直接挂在块的 `parent` 下） */
   subgraphs?: Record<string, { steps: string[] }>
@@ -208,7 +218,7 @@ interface ChainArtifact {
   processes?: {
     note: string
     items: ChainProcess[]
-    /** 兜底名单：旧划分覆盖不到的量（**不替它们编过程名**） */
+    /** 兜底名单：还没收编进过程面的量（现为空——新增模块已按模块主题就近立条） */
     uncovered?: { note: string; members: string[] }
   }
 }
@@ -232,27 +242,20 @@ export const allNodes = (): ChainNode[] => [
   ...chain.nodes,
 ]
 
-/** 表面节点：自顶向下那条链 */
-export const surfaceNodes = (): ChainNode[] => allNodes().filter((node) => (node.layer ?? 'surface') === 'surface')
-
-/** 子图节点：属于某个表面节点、默认收起 */
-export const subgraphNodes = (parent?: string): ChainNode[] =>
-  allNodes().filter((node) => node.layer === 'subgraph' && (!parent || node.parent === parent))
+/**
+ * 表面节点：自顶向下那条链。函数那一级不上图之后（`design.md` D1），
+ * **全部量都在表面上**——原先靠 `layer === 'subgraph'` 收起来的那两个工程项也不例外。
+ */
+export const surfaceNodes = (): ChainNode[] => allNodes()
 
 export const nodeById = (id: string): ChainNode | undefined => allNodes().find((node) => node.id === id)
 
 export const edgeKey = (edge: ChainEdge): string => `${edge.from}->${edge.to}`
 
-/** 表面上的边：两端都在表面的才算"这条链上的箭" */
+/** 表面上的边：两端都在表面的才算"这条链上的箭"（如今两端都是量，判据仍在，防的是悬空的边） */
 export const surfaceEdges = (): ChainEdge[] => {
   const ids = new Set(surfaceNodes().map((node) => node.id))
   return chain.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to))
-}
-
-/** 连到子图的边：不在表面画，归子图内部 */
-export const subgraphEdges = (): ChainEdge[] => {
-  const ids = new Set(subgraphNodes().map((node) => node.id))
-  return chain.edges.filter((edge) => ids.has(edge.from) || ids.has(edge.to))
 }
 
 export const incomingEdges = (id: string): ChainEdge[] => surfaceEdges().filter((edge) => edge.to === id)
@@ -336,19 +339,23 @@ export interface ParamGroup {
 const GROUP_LABELS: Record<string, string> = {
   drivers: '驱动量',
   astro: '天体物理参数',
+  cosmo: '宇宙学参数',
   numeric: '数值与精度',
   effects: '效应开关',
 }
 
-/** 分组顺序由数据声明（`params.order`）；没声明时退回历史三组 */
+/**
+ * 分组＝产物 `params` 里所有数组型键，顺序即键序（生成器按真源 `params.order` 依次写入）。
+ * 这里**不写死组名**：写死会让新加的组被静默丢掉——既进不了侧栏，也没有任何地方报错。
+ */
 export const paramGroups = (): ParamGroup[] => {
-  const order = (chain.params.order as string[] | undefined) ?? ['drivers', 'numeric', 'effects']
-  return order
-    .filter((name) => Array.isArray(chain.params[name]))
+  const source = chain.params as unknown as Record<string, unknown>
+  return Object.keys(source)
+    .filter((name) => Array.isArray(source[name]))
     .map((name) => ({
       name,
       label: GROUP_LABELS[name] ?? name,
-      params: chain.params[name] as ChainParam[],
+      params: source[name] as ChainParam[],
     }))
 }
 
@@ -386,7 +393,10 @@ export const defaultTextOfParam = (param: ChainParam): string => {
 /* ---------------- 侧栏词条：按**代码里的类名**分组 ---------------- */
 
 /**
- * 侧栏词条：一个**能落到图上**的参数（在参数 × 节点矩阵里有条目，点了就点得亮）。
+ * 侧栏词条：**登记在册的参数都有一条**（包括在参数 × 节点矩阵里没有条目的那些）。
+ *
+ * 没落点的不静默丢掉：`located` 为假、`note` 写明是**哪一种**「无」（见 `paramAbsenceReason`）——
+ * 于是列表里翻得到、检索里也在，只是点了点不亮任何量。丢掉它等于让人以为这个参数不存在。
  *
  * 分组名取自生成物的 `param.group`，**不按生成物里的数组名分组**：同一份参数在不同数组里
  * 可以是不同的类（`R_MAX_TS` 在 `numeric` 数组里，`group` 是 `AstroParams`），
@@ -402,6 +412,14 @@ export interface ChainParamEntry {
   nodeCount: number
   /** 它门控的边数（开关类才有） */
   edgeCount: number
+  /** 它门控的边的人话两端（如 `恒星形成效率 → 标度关系`）；不是开关就空 */
+  gateLabels: string[]
+  /** 门控边两端的量数（开关类才有）：它为真时改的是这几个量那一支 */
+  gatedNodeCount: number
+  /** 在参数 × 节点矩阵里有条目（点了点得亮）；为假时原因写在 `note` 里 */
+  located: boolean
+  /** 没有落点时的原因（有落点则缺省） */
+  note?: string
 }
 
 /** 类名缺失时的兜底分组名（不许把词条静默丢掉） */
@@ -413,22 +431,24 @@ export interface ChainParamClassGroup {
   entries: ChainParamEntry[]
 }
 
-/** 词条清单：只收能落到图上的参数，按名字排序（生成物是静态的，算一次留用） */
+/** 词条清单：**登记参数全收**（含没有落点的），按名字排序（生成物是静态的，算一次留用） */
 let paramEntryCache: ChainParamEntry[] | null = null
 export const paramEntries = (): ChainParamEntry[] => {
   paramEntryCache ??= allParams()
-    .map((param): ChainParamEntry | null => {
+    .map((param): ChainParamEntry => {
       const matrix = paramMatrixOf(param.name)
-      if (!matrix) return null
       return {
         name: param.name,
         pl2012: param.pl2012,
         group: (param.group ?? '').trim() || PARAM_GROUP_FALLBACK,
-        nodeCount: matrix.nodes.length,
-        edgeCount: matrix.edges.length,
+        nodeCount: matrix?.nodes.length ?? 0,
+        edgeCount: matrix?.edges.length ?? 0,
+        gateLabels: paramGateLabels(param.name),
+        gatedNodeCount: paramGatedNodes(param.name).length,
+        located: Boolean(matrix),
+        note: matrix ? undefined : paramAbsenceReason(param.name),
       }
     })
-    .filter((entry): entry is ChainParamEntry => Boolean(entry))
     .sort((a, b) => a.name.localeCompare(b.name))
   return paramEntryCache
 }
@@ -452,19 +472,72 @@ export const paramEntryOf = (name: string): ChainParamEntry | undefined =>
   paramEntries().find((entry) => entry.name === name)
 
 /**
- * 参数落在哪几个块（由参数 × 节点矩阵反查 `blocks.items`，**不新增数据**）。
- * 用来把"这个参数点亮了哪些天体物理过程"直接写在检索结果里。
+ * 门控边两端的量（开关类才有）：矩阵的 `edges` 存的是 `from->to` 键，这里拆开、去掉已经算
+ * "直接作用"的那些，保序去重。
+ *
+ * 为什么要有这个：开关（如 `USE_UPPER_STELLAR_TURNOVER`）在代码里**没有读点**——它改的不是某个值，
+ * 是**走哪一支**，所以矩阵里只有边没有节点。可那条边在图上是有两端的
+ * （`fstar -> scaling_relations`，边注就写着它在这里改高质端的取值）："作用于 0 个量"是实话却没用，
+ * 开关的去处就是这条边所在的过程与产物，写到这两端才点得亮东西。**不新增数据**——两端从边键里读。
  */
-export const paramBlocks = (name: string): string[] => [
-  ...new Set((paramMatrixOf(name)?.nodes ?? []).map((id) => blockLabelOf(id)).filter((label): label is string => Boolean(label))),
+export const paramGatedNodes = (name: string): string[] => {
+  const matrix = paramMatrixOf(name)
+  if (!matrix?.edges.length) return []
+  const direct = new Set(matrix.nodes)
+  return [...new Set(matrix.edges.flatMap((key) => key.split('->')))].filter((id) => id && !direct.has(id))
+}
+
+/**
+ * 门控边的人话（`fstar->scaling_relations` → `f* → 标度关系(M_h)`）：检索说明与悬停提示共用。
+ * 两端只用**符号那一半**——节点的显示名是 `符号 · 名字` 两段，取 ` · ` 前那段；
+ * 一句提示里塞两个全名会读不清，全名在脚上区那两个 chip 上。
+ */
+export const paramGateLabels = (name: string): string[] =>
+  (paramMatrixOf(name)?.edges ?? []).map((key) =>
+    key
+      .split('->')
+      .map((id) => {
+        const label = labelOfGraphNode(id)
+        return label.split(' · ')[0] || label
+      })
+      .join(' → '),
+  )
+
+/**
+ * 参数在图上**碰到的量**：矩阵里的直接落点（代码扫出来的读点）+ 门控边两端（开关类）。
+ * 块归属、两面互查、脚上区都走这一处——口径只有一份，否则"点过程列出的参数"与"点参数列出的过程"会对不上。
+ */
+export const paramTouchedNodes = (name: string): string[] => [
+  ...(paramMatrixOf(name)?.nodes ?? []),
+  ...paramGatedNodes(name),
 ]
 
-/* ============ 一级划分：12 个块（读生成物的 `graph.blocks`，不按 parent 重算） ============ */
+/**
+ * 参数在图上没有落点时，如实写原因——光写「作用于 无」说不清是**哪一种**无：
+ * ① `inCode` 为假：源码的参数结构里根本没有它（口径与自检一致："源码里没有，但产物标成 inCode" 才算错）；
+ * ② 其余：代码里有读点，但链上没有任何量落在读到它的那段代码上——缺的是量声明或承担者的实名，不是渲染。
+ * 只门控边的开关**不算没有落点**：它的落点就是那条边的两端（见 `paramGatedNodes`）。
+ */
+export const paramAbsenceReason = (name: string): string => {
+  const param = allParams().find((item) => item.name === name)
+  if (param?.inCode === false) return '代码里没有它'
+  return '链上没有量落在读到它的那段代码上'
+}
+
+/**
+ * 参数落在哪几个块（由参数 × 节点矩阵反查 `blocks.items`，**不新增数据**）。
+ * 用来把"这个参数点亮了哪些天体物理过程"直接写在检索结果里——门控边的两端也算（开关落在哪条过程上）。
+ */
+export const paramBlocks = (name: string): string[] => [
+  ...new Set(paramTouchedNodes(name).map((id) => blockLabelOf(id)).filter((label): label is string => Boolean(label))),
+]
+
+/* ============ 一级划分：11 个块（读生成物的 `graph.blocks`，不按 parent 重算） ============ */
 
 /**
  * **不属于物理链**的那些话题：`topic:impl`（实现细节＝工程节点），以及挂在它们身上的参数。
  *
- * 它们已经**不再是一层可展开/收起的东西**——一级只有 12 个块（10 个过程块 + 2 个层），工程项贴在块
+ * 它们已经**不再是一层可展开/收起的东西**——一级只有 11 个块（10 个过程块 + 1 个层），工程项贴在块
  * **内部**的成员层，走进块才看得到（`task 3.5`）。这份清单因此只剩一个用途：**检索命中时标来源**，
  * 让人知道"这个词读得到，但它不在物理链上"。
  */
@@ -476,7 +549,7 @@ export const ENGINEERING_LABEL = '实现细节'
 const graphNodes = (): ChainGraphNode[] => graph.nodes
 const graphEdges = (): ChainGraphEdge[] => graph.edges
 
-/** 一级的 12 个块：**只读生成物**给的那份（成员 / 可进入 / 主序位次 / 接口都在里面） */
+/** 一级的 11 个块：**只读生成物**给的那份（成员 / 可进入 / 主序位次 / 接口都在里面） */
 export const chainBlocks = (): ChainBlock[] => graph.blocks?.items ?? []
 
 /** 一级的口径数字（状态条与自检读同一份）：块数 / 过程块 / 层 / 物理量成员 / 文件成员 / 接口边 */
@@ -493,17 +566,18 @@ export const blockLabelOf = (nodeId: string): string | null => blockOfMember.get
 
 /**
  * 这个对象「进去」能看到几个**子对象**：块＝它自己的**成员数**（层不给入口 → 0），
- * 成员＝它**自己的**实现步骤数（没有步骤就是 0）。
+ * **成员一律 0**——函数那一级不上图（`design.md` D1）：谁把它算出来、切在哪几个函数里，
+ * 回答的是"这个量由哪几行算出"，归代码落点管，不归图层管。
  *
  * 两件事别混：`blockOf` 回答的是"这个量**装在**哪个块里"——拿它当成员自己的子节点数，
- * 会让 ⑨观测量 里的 `p21` / `k_target`（没有实现步骤）也报出「4 个子节点」（＝ M10 的成员数），
- * 点进去却是一张空画布。数字与"能不能进"共用这一个判据，两处不会各说各话。
+ * 会让 ⑨观测量 里的 `p21` 也报出「3 个子节点」（＝ M10 的成员数），点进去是一张空画布。
+ * 数字与"能不能进"共用这一个判据，两处不会各说各话。
  */
 export const subgraphSizeOf = (nodeId: string | null): number => {
   if (!nodeId) return 0
   const block = chainBlocks().find((item) => item.id === nodeId)
-  if (block) return block.enterable ? block.memberCount : 0
-  return graph.subgraphs?.[nodeId]?.steps.length ?? graphNodes().filter((node) => node.parent === nodeId).length
+  if (!block) return 0
+  return block.enterable ? block.memberCount : 0
 }
 
 const hasEngineeringTopic = (id: string): boolean =>
@@ -530,18 +604,16 @@ export const isEngineeringObject = (kind: 'node' | 'edge', id: string): boolean 
  *   · 划分依据 = **天体物理过程**（一个过程 = 一组按等式串起来的量，能独立读懂）；
  *   · 与本页的 `blocks`（代码模块面）**并存**，且是**多对一**——三个过程同属一个代码模块是常态。
  *
- * `fit` 是**论文拟合律 / 物理公式的口径**，只收代码注释里真实出现的引用（逐条带 `文件:行`），
- * 查不到就留空：视图照抄，不推断、不补全（那份空缺本身就是给人核验的线索）。
+ * `fit` 是**这条过程用到的公式 / 近似**：写得清就写（能带 `文件:行` 出处更好），写不出就留空，
+ * 不硬凑、不推断；名字与口径求"相近、看得懂"，不追逐条可核。
  */
 export interface ChainProcess {
   id: string
   label: string
-  /** 过程，还是「带」（带不是过程：成员之间没有块内边，进不去子图） */
-  kind: 'process' | 'band'
   members: string[]
   /** 主块 id（点过程时定位到它）；过程跨块时取成员最多的那个 */
   primaryBlock: string
-  /** 论文拟合律 / 物理公式的口径（空 = 代码注释里没查到，待人工核验） */
+  /** 这条过程用到的公式 / 近似（空 = 没写出来） */
   fit: string
   note?: string
 }
@@ -551,11 +623,11 @@ export const chainProcesses = (): ChainProcess[] => chain.processes?.items ?? []
 /** 过程面的口径（真源同一句：划分依据 + 与代码模块面的关系 + `fit` 的收条标准） */
 export const chainProcessNote = (): string => chain.processes?.note ?? ''
 
-/** 兜底名单：旧划分覆盖不到的量（出生在旧稿之后的模块）——不替它们编过程名 */
+/** 兜底名单：还没收编进过程面的量（现为空——新增模块已按模块主题就近立条） */
 export const processUncovered = (): { note: string; members: string[] } =>
   chain.processes?.uncovered ?? { note: '', members: [] }
 
-/** 量 → 它挂在哪些过程 / 带下（反向：点一个量就能点亮过程面；一个量可以挂在不止一条下） */
+/** 量 → 它挂在哪些过程下（反向：点一个量就能点亮过程面；一个量可以挂在不止一条下） */
 const processesOfMember = new Map<string, ChainProcess[]>()
 for (const item of chainProcesses()) {
   for (const member of item.members) processesOfMember.set(member, [...(processesOfMember.get(member) ?? []), item])
@@ -564,7 +636,8 @@ export const processesOf = (nodeId: string): ChainProcess[] => processesOfMember
 
 /**
  * **过程 → 参数**的反查（口径只有一份：走既有的「参数 × 节点矩阵」，不另造参数归属表）。
- * 判据：某参数在矩阵里落到的量，与这条过程下辖的量有交集 → 它被算作"与这条过程相关"。
+ * 判据：某参数在图上**碰到的量**（矩阵落点 + 门控边两端，见 `paramTouchedNodes`）与这条过程下辖的
+ * 量有交集 → 它被算作"与这条过程相关"（开关落在哪条过程上，靠的就是门控边那两端）。
  * 视图（点亮参数面、为空时写「无」）与自检（口径同源那条）都从这一处取。
  */
 export const paramsOfProcess = (processId: string): string[] => {
@@ -572,7 +645,7 @@ export const paramsOfProcess = (processId: string): string[] => {
   if (!item) return []
   const members = new Set(item.members)
   return allParams()
-    .filter((param) => (paramMatrixOf(param.name)?.nodes ?? []).some((id) => members.has(id)))
+    .filter((param) => paramTouchedNodes(param.name).some((id) => members.has(id)))
     .map((param) => param.name)
 }
 
@@ -586,7 +659,6 @@ export const paramsOfProcess = (processId: string): string[] => {
 export interface ChainProcessEntry {
   id: string
   label: string
-  kind: 'process' | 'band'
   /** 下辖物理量的条数 */
   memberCount: number
   /** 与它相关的参数个数（走「参数 × 节点矩阵」反查；0 = 参数面里没人读到它，UI 要写「无」） */
@@ -595,7 +667,7 @@ export interface ChainProcessEntry {
   paperCount: number
   /** 主块 id（点它定位过去；显示名不出现在词条上，见上） */
   primaryBlock: string
-  /** 论文拟合律 / 物理公式的口径（空 = 代码注释里没查到，待核） */
+  /** 这条过程用到的公式 / 近似（空 = 没写出来） */
   fit: string
   note?: string
   /** 下辖量的清单（词条展开时列出来；点每一项定位到那个量） */
@@ -620,7 +692,6 @@ export const chainProcessEntries = (): ChainProcessEntry[] =>
   chainProcesses().map((item) => ({
     id: item.id,
     label: item.label,
-    kind: item.kind,
     memberCount: item.members.length,
     paramCount: paramsOfProcess(item.id).length,
     paperCount: processPaperCount(item.id),
@@ -682,23 +753,30 @@ export const searchChain = (query: string): ChainSearchResult => {
     const matrix = paramMatrixOf(param.name)
     const nodes = matrix?.nodes ?? []
     const edges = matrix?.edges ?? []
+    const gated = paramGatedNodes(param.name)
     const blocks = paramBlocks(param.name)
     push({
       kind: 'param',
       id: param.name,
       label: param.pl2012 ? `${param.name} · ${param.pl2012}` : param.name,
       /**
-       * 说明的次序：**代码类 → 落到哪几个块 → 多少个量 → 门控几条边**。
+       * 说明的次序：**代码类 → 落到哪几个块 → 多少个量 → 门控哪几条边**。
        * 块名由矩阵反查 `blocks.items`（不新增数据）；量还没归块时如实说"还没落到任何块"。
+       * 开关类没有直接落点时写"为真时改走哪几个量那支"：那条边的两端就是它的去处（见 `paramGatedNodes`）。
        */
       detail: [
         paramEntryOf(param.name)?.group ?? PARAM_GROUP_FALLBACK,
         blocks.length ? `落在 ${blocks.join('、')}` : '还没落到任何块',
-        `作用于 ${nodes.length} 个物理量`,
-        ...(edges.length ? [`门控 ${edges.length} 条边`] : []),
+        nodes.length
+          ? `作用于 ${nodes.length} 个物理量`
+          : gated.length
+            ? `不改量的值，为真时改走 ${gated.length} 个量那支`
+            : `作用于 0 个物理量（${paramAbsenceReason(param.name)}）`,
+        ...(edges.length ? [`门控 ${paramGateLabels(param.name).join('、')}`] : []),
       ].join(' · '),
       collapsed: nodes.length ? isEngineeringObject('node', nodes[0]) : false,
-      focus: focusOf(nodes[0]),
+      // 没有直接落点时取门控边的上游端：检索命中能飞到那条边挂着的量上，而不是飞无可飞
+      focus: focusOf(nodes[0] ?? gated[0]),
     })
   })
 
@@ -713,7 +791,7 @@ export const searchChain = (query: string): ChainSearchResult => {
      */
     const belongs = String(node.id).startsWith('block:')
       ? node.blockKind === 'layer'
-        ? '横切层'
+        ? '层'
         : `过程块 · 主序第 ${node.order ?? 0} 步`
       : `属于 ${blockLabelOf(node.id) ?? '（未归块）'}`
     push({
@@ -739,7 +817,7 @@ export const searchChain = (query: string): ChainSearchResult => {
       id: entry.id,
       label: entry.label,
       detail: [
-        entry.kind === 'band' ? '带（不是过程）' : '过程·按论文等式划分',
+        '过程·按论文等式划分',
         `下辖 ${entry.memberCount} 个量`,
         entry.paramCount ? `${entry.paramCount} 个相关参数` : '无相关参数',
         entry.paperCount ? `${entry.paperCount} 篇出处` : '没查到出处',
@@ -774,9 +852,9 @@ export const searchChain = (query: string): ChainSearchResult => {
 /* ============ 本页规模（状态条用；四个数都从生成物里数出来） ============ */
 
 export interface ChainStats {
-  /** 过程块：一级 12 个块里"过程"那 10 个（L0 常数与网格层 / L1 共享内核层 是层，不算过程） */
+  /** 过程块：一级 11 个块里"过程"那 10 个（常数与网格是层，不算过程） */
   processBlocks: number
-  /** 物理量：12 个块的成员里**物理量**的条数（28 个，不重不漏；层的 16 个头文件不算，见 stats.fileMembers） */
+  /** 物理量：一级 11 个块的成员里**物理量**的条数（39 个，不重不漏；块里只有物理量，文件不挂成员） */
   quantities: number
   /** 参数：生成物里登记的全部参数（驱动量 + 天体物理 + 宇宙学 + 数值 + 开关） */
   params: number
@@ -790,8 +868,8 @@ export const chainStats = (): ChainStats => {
   return {
     processBlocks: blocks.filter((block) => block.kind === 'process').length,
     /**
-     * 数物理量只数 `quantityMemberCount`（不是 `members.length`）：L1 的成员是 16 个头文件名，
-     * 拿成员条数当"物理量数"会在状态条上报出"44 个物理量"。
+     * 数物理量只数 `quantityMemberCount`（不是 `members.length`）：块里还混着工程节点，
+     * 拿成员条数当"物理量数"会把它们一起算进去。
      */
     quantities: stats.members ?? blocks.reduce((sum, block) => sum + block.quantityMemberCount, 0),
     params: allParams().length,

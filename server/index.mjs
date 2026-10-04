@@ -4,6 +4,7 @@ import express from 'express'
 import { mdRouter } from './routes/md.mjs'
 import { graphRouter } from './routes/graph.mjs'
 import { codeRouter } from './routes/code.mjs'
+import { chainLayoutRouter } from './routes/chainLayout.mjs'
 import { CODE_DIR, DIST_DIR, JSON_BODY_LIMIT, MD_DIR, ROOT_DIR } from './lib/paths.mjs'
 
 const HOST = process.env.HOST || '0.0.0.0'
@@ -40,6 +41,8 @@ export async function createApp() {
   app.use('/api/md', mdRouter)
   app.use('/api/code', codeRouter)
   app.use('/api/graph', graphRouter)
+  // 物理链页的手动摆放（`data/chain-layout.json`）：与画布那张图分开的一条通路
+  app.use('/api/chain-layout', chainLayoutRouter)
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: '接口不存在' })
   })

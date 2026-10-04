@@ -1,16 +1,14 @@
-import { History, Maximize2, Minus, Plus, Sparkles, Tag, Upload, ZoomIn } from 'lucide-react'
+import { History, Maximize2, Minus, Palette, Plus, Sparkles, Tag, Upload, ZoomIn } from 'lucide-react'
 import { Button } from './ui/button'
 import { Tooltip } from './ui/tooltip'
-import {
-  NODE_TYPE_COLORS,
-  NODE_TYPE_LABELS,
-  NODE_TYPE_ORDER,
-  EDGE_TYPE_LABELS,
-  EDGE_TYPE_ORDER,
-  type NodeType,
-} from '../lib/types'
+import { NODE_TYPE_COLORS, NODE_TYPE_LABELS, type NodeType } from '../lib/types'
 import { cn } from '../lib/utils'
-import { EDGE_COLOR } from '../graph/palette'
+import {
+  EDGE_STYLE_DASH,
+  EDGE_STYLE_LEGEND,
+  type EdgeStyleId,
+  type EdgeStyleLegendEntry,
+} from '../graph/palette'
 
 export function ZoomControls({
   zoom,
@@ -92,8 +90,9 @@ export interface CrossRedshiftFeedbackState {
  * 它管的是这件事的**全部视图面**：一级上块 → 块的那几条弧，以及它们在弧两端块子图里的成员级落点
  * （上一轮送出的量 → 这一步读它的量，连同落点两端那些灰显的盒子）。
  *
- * 为什么必须报数：关闭态下这些**全都不画**（见 `graph/styles.ts` 的那条关闭态规则），
- * 画布上没有任何痕迹说明"这里还藏着一层关系"——所以控件把当前口径报全：开着还是关着、藏了几条。
+ * 为什么口径要报全：关闭态下这些**全都不画**（见 `graph/styles.ts` 的那条关闭态规则），
+ * 画布上没有任何痕迹说明"这里还藏着一层关系"——所以开关把口径报全：**标签上**只留开关名与开 / 关，
+ * **悬停提示里**给出藏了几条以及它管哪些视图面（标签上不印统计）。
  * 条数为 0 时不渲染成开关，而是说明原因（产物里没有这类边），否则会得到"点了没反应"的死开关。
  */
 export function CrossRedshiftFeedbackToggle({ state }: { state?: CrossRedshiftFeedbackState }) {
@@ -122,72 +121,133 @@ export function CrossRedshiftFeedbackToggle({ state }: { state?: CrossRedshiftFe
         className={cn('glass-panel pointer-events-auto', state.enabled && 'bg-primary/10 text-primary')}
       >
         <History className="h-3.5 w-3.5" />
-        跨红移反馈 · {state.count} 条（{state.enabled ? '已显现' : '已藏起'}）
+        跨红移反馈 · {state.enabled ? '已显现' : '已藏起'}
       </Button>
     </Tooltip>
   )
 }
 
 /**
- * 图例只列**当前图谱实际出现**的类型：类型是「要素种类」，一张图通常只用其中几类，
- * 把未使用的类型（工具、问题…）堆进图例只会占地方、还会让人去找根本不存在的颜色。
+ * 图例：**只列这一页此刻真画出来的东西**，贴画布左下角、默认收起成一枚入口。
+ *
+ * 两段条目都是派生的，不是写死的清单：
+ * - 要素种类由渲染器报出此刻**真画出来**的那些（`types`，见 `GraphRenderer.presentNodeTypes`）——
+ *   收起来的话题、别的标签页、收起的分支都不占条目，画布页因此也不会列出它根本没有的「相关 / 引用」；
+ * - 线型同一口径（`edgeStyles`，见 `GraphRenderer.presentEdgeStyles`），于是物理链页终于能列出
+ *   「跨红移回流」——它是否出现取决于开关，写死的清单做不到。
+ * 色值与线型取自 `palette.ts` 那张表（与 `styles.ts` 同源），这里只负责画。
+ *
+ * 为什么默认收起：展开态是一块会换行的浮层，常驻就压在画布上；收起态只占一行。
+ * 点开在它**上方**铺开（它贴着画布下边界，往下铺不开）。
  */
-export function GraphLegend({ compact = false, types }: { compact?: boolean; types?: NodeType[] }) {
-  const shown = types?.length ? types : NODE_TYPE_ORDER
+export function GraphLegend({
+  types,
+  edgeStyles,
+  labels,
+  open,
+  onToggle,
+}: {
+  types: NodeType[]
+  edgeStyles: EdgeStyleId[]
+  /** 页面自有的叫法（缺省用表里的通用名）。物理链页把它那一档「主序」叫作「同一红移内的数据流」 */
+  labels?: Partial<Record<EdgeStyleId, string>>
+  /** 展开态由调用方持有：点画布空白收起图例与「点空白回到什么都没点亮」是同一次手势 */
+  open: boolean
+  onToggle: () => void
+}) {
   return (
-    <div
-      className={cn(
-        'glass-panel pointer-events-auto rounded-lg px-2.5 py-2 text-micro',
-        compact ? 'flex items-center gap-3' : 'flex flex-col gap-1.5',
-      )}
-    >
-      <div className={cn('flex flex-wrap gap-x-3 gap-y-1', compact ? 'items-center' : '')}>
-        {shown.map((type) => (
-          <span key={type} className="flex items-center gap-1.5 text-muted-foreground">
-            <span
-              className="h-2 w-2 rounded-[3px]"
-              style={{ backgroundColor: NODE_TYPE_COLORS[type], boxShadow: `0 0 8px ${NODE_TYPE_COLORS[type]}80` }}
-            />
-            {NODE_TYPE_LABELS[type]}
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-black/[0.06] pt-1.5">
-        {/* 箭头标记：语义关系带箭头，层级连线不带，图例里按同一规则对照 */}
-        <svg width="0" height="0" className="absolute" aria-hidden="true">
-          <defs>
-            <marker
-              id="legend-arrow"
-              viewBox="0 0 8 8"
-              refX="7"
-              refY="4"
-              markerWidth="5"
-              markerHeight="5"
-              orient="auto-start-reverse"
+    <div className="pointer-events-auto flex flex-col items-start gap-2">
+      {open ? (
+        <div
+          role="group"
+          aria-label="图例"
+          className="glass-panel flex max-w-[min(92vw,640px)] flex-col gap-1.5 rounded-lg px-2.5 py-2 text-micro"
+        >
+          {types.length ? (
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {types.map((type) => (
+                <span key={type} className="flex items-center gap-1.5 text-muted-foreground">
+                  <span
+                    className="h-2 w-2 rounded-[3px]"
+                    style={{
+                      backgroundColor: NODE_TYPE_COLORS[type],
+                      boxShadow: `0 0 8px ${NODE_TYPE_COLORS[type]}80`,
+                    }}
+                  />
+                  {NODE_TYPE_LABELS[type]}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {edgeStyles.length ? (
+            <div
+              className={cn(
+                'flex flex-wrap gap-x-3 gap-y-1',
+                types.length && 'border-t border-black/[0.06] pt-1.5',
+              )}
             >
-              <path d="M0,0 L8,4 L0,8 Z" fill={EDGE_COLOR} />
-            </marker>
-          </defs>
-        </svg>
-        {EDGE_TYPE_ORDER.slice(0, 4).map((type) => (
-          <span key={type} className="flex items-center gap-1.5 text-muted-foreground/80">
-            <svg width="16" height="6" viewBox="0 0 16 6" className="shrink-0">
-              <line
-                x1="0"
-                y1="3"
-                x2="16"
-                y2="3"
-                stroke={EDGE_COLOR}
-                strokeWidth="1.4"
-                strokeDasharray={type === 'relates_to' ? '4 3' : undefined}
-                markerEnd="url(#legend-arrow)"
-              />
-            </svg>
-            {EDGE_TYPE_LABELS[type]}
-          </span>
-        ))}
-      </div>
+              {edgeStyles.map((id) => (
+                <span key={id} className="flex items-center gap-1.5 text-muted-foreground/80">
+                  <EdgeSample entry={EDGE_STYLE_LEGEND[id]} />
+                  {labels?.[id] ?? EDGE_STYLE_LEGEND[id].label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <Tooltip content="图例：本页画出来的要素与线型">
+        <Button variant="ghost" size="sm" aria-expanded={open} onClick={onToggle} className="glass-panel">
+          <Palette className="h-3.5 w-3.5" />
+          图例
+        </Button>
+      </Tooltip>
     </div>
+  )
+}
+
+/**
+ * 图例里的样例线段：按表里那一档画（线色 / 线型 / 画不画箭头 / 直或弧）。
+ *
+ * 提供 / 数据流动与跨红移回流在画布上是鼓开的弧（读作"绕过去"而非树脊），这里用一段二次曲线表示，
+ * 不然那两档在图例里会被读成普通直线，与画布对不上。
+ *
+ * 箭头标记按**线色**各建一个：同一张图里最多几档色，标记 id 由色值派生即可稳定去重；
+ * 两个页面同时挂着图例时它俩的 id 相同，但定义逐字一致，画出来没有差别。
+ */
+function EdgeSample({ entry }: { entry: EdgeStyleLegendEntry }) {
+  const { color, kind, width, arrow, curve } = entry
+  const dash = EDGE_STYLE_DASH[kind]
+  const markerId = `legend-arrow-${color.replace('#', '')}`
+  const mid = 5
+  const common = {
+    stroke: color,
+    strokeWidth: width,
+    strokeDasharray: dash,
+    markerEnd: arrow ? `url(#${markerId})` : undefined,
+    fill: 'none',
+  }
+  return (
+    <svg width="20" height="10" viewBox="0 0 20 10" className="shrink-0" aria-hidden="true">
+      <defs>
+        <marker
+          id={markerId}
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="5"
+          markerHeight="5"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L8,4 L0,8 Z" fill={color} />
+        </marker>
+      </defs>
+      {curve ? (
+        <path d={`M0,${mid + 2} Q10,${mid - 5} 20,${mid + 2}`} {...common} />
+      ) : (
+        <line x1="0" y1={mid} x2="20" y2={mid} {...common} />
+      )}
+    </svg>
   )
 }
 

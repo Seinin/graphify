@@ -21,6 +21,14 @@ export interface GraphSource {
   activeTagIds: string[]
   hiddenRelationIds: string[]
   toggleHiddenRelations: (nodeId: string) => void
+  /**
+   * 点画布空白 = 回到**什么都没点亮**：清选中（检查器随之空）**并**熄灭这一页自己的点亮标记
+   * （画布页的标签勾选与红点、物理链页的词条点亮与红点）。
+   *
+   * 单独一条通路、而不是塞进 `select`：`select(null, null)` 还被关属性页、切页、清检索那几处用，
+   * "选中变空"不该顺手把勾选也清掉。子图标签页（看到哪儿）不归它管。
+   */
+  clearHighlight: () => void
 }
 
 const SourceContext = createContext<GraphSource | null>(null)
@@ -47,6 +55,7 @@ export function useGraphSource(): GraphSource {
   const activeTagIds = useGraphStore((state) => state.activeTagIds)
   const hiddenRelationIds = useGraphStore((state) => state.hiddenRelationIds)
   const toggleHiddenRelations = useGraphStore((state) => state.toggleHiddenRelations)
+  const setActiveTags = useGraphStore((state) => state.setActiveTags)
 
   return useMemo(
     () =>
@@ -59,7 +68,11 @@ export function useGraphSource(): GraphSource {
         activeTagIds,
         hiddenRelationIds,
         toggleHiddenRelations,
+        clearHighlight: () => {
+          select(null, null)
+          setActiveTags([])
+        },
       },
-    [fromProvider, graph, selection, select, hoveredNodeId, setHovered, activeTagIds, hiddenRelationIds, toggleHiddenRelations],
+    [fromProvider, graph, selection, select, hoveredNodeId, setHovered, activeTagIds, hiddenRelationIds, toggleHiddenRelations, setActiveTags],
   )
 }

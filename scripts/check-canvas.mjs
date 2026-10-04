@@ -249,7 +249,8 @@ styleCheck('取消勾选后红点熄灭', cy.$('node.tagged').length, 0)
 }
 
 styleCheck('模块带「可进入」标记（.branch）', cy.$('#A1').hasClass('branch'), true)
-styleCheck('模块徽标计数只算直系子节点', cy.$('#A1').data('branchLabel'), 'A 里的过程 1 · 1')
+styleCheck('模块徽标只印模块名（计数不写进名字）', cy.$('#A1').data('branchLabel'), 'A 里的过程 1')
+styleCheck('直系子节点数仍在 data 里（收进悬停提示）', cy.$('#A1').data('childCount'), 1)
 styleCheck('装饰容器不带模块标记', cy.$('#A').hasClass('branch'), false)
 styleCheck('模块的子节点不挂 compound（不与父同屏）', cy.$('#A1a').parent().length, 0)
 styleCheck('装饰框的子节点挂 compound（画在框里）', cy.$('#A2').parent().id(), 'A')
@@ -555,6 +556,127 @@ cy.$('#e2').removeClass('dimmed')
   styleCheck('标签的类别配色与表一致（被管的严格相等）', tagProblems.join(' / ') || 'none', 'none')
   styleCheck('tag:BOX_LEN 的名字已改回原变量名', tags.find((tag) => tag.id === 'tag:BOX_LEN')?.name, 'BOX_LEN')
   styleCheck('画布红点未被改成类别色', TAG_DOT_COLOR, '#E11D48')
+}
+
+/* ---------------- 图例：条目从此刻真画出来的元素派生 ---------------- */
+/**
+ * 图例两段条目都不是写死的清单，而是渲染器按此刻**可见的元素**报出来的：
+ * 线型走 `presentEdgeStyles`（可见的边），要素种类走 `presentNodeTypes`（可见的节点）。
+ * 这里守四件事：
+ *   ① 真实数据上只报本页真画的那几档——画布页上没有「相关 / 引用 / 回流」，就不该列出来；
+ *   ② 藏起来的不占条目：跨红移回流关掉时它是 `display: none`，图例里那一条必须跟着消失；
+ *   ③ 图例每一档的色值都能在样式表里找到（图例与画布各写一套色值，是这块最容易复发的问题）；
+ *   ④ 要素种类同一口径，且顺序走 `NODE_TYPE_ORDER`——藏起来的节点不占条目，次序不随遍历漂。
+ */
+{
+  const { EDGE_STYLE_LEGEND, EDGE_STYLE_ORDER } = await load('src/graph/palette.ts', 'palette')
+
+  styleCheck(
+    '线型表覆盖全部档（顺序表 = 表的键集）',
+    Object.keys(EDGE_STYLE_LEGEND).sort().join(','),
+    [...EDGE_STYLE_ORDER].sort().join(','),
+  )
+  /**
+   * 色值同源：样式表（`styles.ts`）把这一档的常量插值进去，所以序列化后应当能逐档找到那个色值。
+   * 反面情形就是这里要挡的——图例自己写一个 hex，画布上却是另一个颜色。
+   */
+  const sheet = JSON.stringify(buildStylesheet())
+  const missingColor = EDGE_STYLE_ORDER.filter((id) => !sheet.includes(EDGE_STYLE_LEGEND[id].color))
+  styleCheck('图例每一档的色值都在样式表里（同源）', missingColor.join(',') || 'none', 'none')
+
+  // ① 真实数据（画布页）：关系只有 depends_on / derives_from（都归「数据流」）与 12 条条件边
+  const raw = JSON.parse(await fs.readFile(path.join(root, 'data', 'graph.json'), 'utf8'))
+  const legendRenderer = new GraphRenderer(handlers)
+  legendRenderer.cy = cytoscape({ headless: true, styleEnabled: true, style: buildStylesheet(), elements: [] })
+  legendRenderer.layoutKind = 'manual'
+  legendRenderer.sync(raw)
+  await settle()
+  const realStyles = legendRenderer.presentEdgeStyles()
+  styleCheck('画布页图例只报真画出来的线型', realStyles.join(','), 'flow,conditional')
+  const absent = ['relates_to', 'contradicts', 'undirected', 'context', 'feedback', 'cross-link'].filter((id) =>
+    realStyles.includes(id),
+  )
+  styleCheck('画布页不列本页没有的档', absent.join(',') || 'none', 'none')
+
+  /**
+   * ② 藏起来的不占条目：造一张带三级跨法的图（普通数据流 / 跳层那一档 / 跨红移回流）。
+   * `setFeedbackVisible(false)` 给回流挂上 `feedback-off`（样式表里那条 `display: none`），
+   * 于是它不该再出现在图例里——这正是"关掉开关后回流那条消失"的可执行版本。
+   *
+   * `f-back` 刻意**两个标记都挂**（`crossLink` + `kind: 'feedback'`），与产物里那两条回流边同形：
+   * 样式表里回流那笔排在 `cross-link` 之后（最后落笔），图例因此必须报「跨红移回流」。
+   * 这条一旦判成 `cross-link`，下面的「打开回流」就会读成 `flow,cross-link`——判据顺序与画法脱钩，
+   * 正是图例上出现"实线的「提供 / 数据流动」、却没有那条虚线回流"的根因。
+   */
+  const legendGraph = {
+    meta: { version: 1, name: '图例自检', description: '', topics: [], tags: [], updatedAt: '' },
+    nodes: [g('F1', '块 1', { position: { x: 0, y: 0 } }), g('F2', '块 2', { position: { x: 240, y: 0 } })],
+    edges: [
+      { id: 'f-flow', source: 'F1', target: 'F2', label: '', type: 'depends_on', directed: true, note: '', sourcePort: null, targetPort: null, conditional: false, createdAt: '', updatedAt: '' },
+      { id: 'f-jump', source: 'F2', target: 'F1', label: '', type: 'derives_from', directed: true, note: '', sourcePort: null, targetPort: null, conditional: false, crossLink: true, createdAt: '', updatedAt: '' },
+      { id: 'f-back', source: 'F2', target: 'F1', label: '', type: 'depends_on', directed: true, note: '', sourcePort: null, targetPort: null, conditional: false, crossLink: true, kind: 'feedback', createdAt: '', updatedAt: '' },
+    ],
+  }
+  const fbRenderer = new GraphRenderer(handlers)
+  fbRenderer.cy = cytoscape({ headless: true, styleEnabled: true, style: buildStylesheet(), elements: [] })
+  fbRenderer.layoutKind = 'manual'
+  fbRenderer.sync(legendGraph)
+  await settle()
+  styleCheck('三档同屏：按表里的顺序报出', fbRenderer.presentEdgeStyles().join(','), 'flow,cross-link,feedback')
+  fbRenderer.setFeedbackVisible(false)
+  await settle()
+  styleCheck('关掉回流：图例里那条消失', fbRenderer.presentEdgeStyles().join(','), 'flow,cross-link')
+  fbRenderer.setFeedbackVisible(true)
+  await settle()
+  styleCheck('打开回流：图例里那条回来', fbRenderer.presentEdgeStyles().join(','), 'flow,cross-link,feedback')
+
+  /**
+   * ④ 要素条目同一口径：两个不同种类的节点，把其中一个 `hide()` 掉，它那一档必须跟着消失。
+   * 顺序也在这里钉住：`method` 在 `NODE_TYPE_ORDER` 里排在 `artifact` 之前，
+   * 报出来的次序不随元素遍历次序漂。
+   */
+  const typeGraph = {
+    meta: { version: 1, name: '图例自检', description: '', topics: [], tags: [], updatedAt: '' },
+    nodes: [
+      g('T1', '方法 1', { type: 'method', position: { x: 0, y: 0 } }),
+      g('T2', '产物 1', { type: 'artifact', position: { x: 240, y: 0 } }),
+    ],
+    edges: [
+      { id: 't-flow', source: 'T1', target: 'T2', label: '', type: 'depends_on', directed: true, note: '', sourcePort: null, targetPort: null, conditional: false, createdAt: '', updatedAt: '' },
+    ],
+  }
+  const typeRenderer = new GraphRenderer(handlers)
+  typeRenderer.cy = cytoscape({ headless: true, styleEnabled: true, style: buildStylesheet(), elements: [] })
+  typeRenderer.layoutKind = 'manual'
+  typeRenderer.sync(typeGraph)
+  await settle()
+  styleCheck('要素条目按表里的顺序报出', typeRenderer.presentNodeTypes().join(','), 'method,artifact')
+  typeRenderer.core.getElementById('T2').hide()
+  styleCheck('藏起来的节点那一档不占条目', typeRenderer.presentNodeTypes().join(','), 'method')
+}
+
+/* ---------------- 换一份坐标：回滚快照 / 载入保留副本要落到图面上 ---------------- */
+{
+  /**
+   * 同一批节点、两份坐标：第二份等价于「点回滚，换到另一份快照的数据」。
+   *
+   * 这条守的是「回滚了但版面没变」：坐标若只在元素首次加入时写入，换数据就只换节点属性，
+   * 图面钉在原位——数据明明回了滚，观感上却像回滚不生效。
+   */
+  const snap = new GraphRenderer(handlers)
+  snap.cy = cytoscape({ headless: true, styleEnabled: true, style: buildStylesheet(), elements: [] })
+  snap.layoutKind = 'manual'
+  const at = (dy) => ({
+    meta: { version: 1, name: '回滚自检', description: '', topics: [], tags: [], updatedAt: '' },
+    nodes: [g('R1', '节点一', { position: { x: 0, y: dy } }), g('R2', '节点二', { position: { x: 300, y: dy } })],
+    edges: [],
+  })
+  snap.sync(at(0))
+  await settle()
+  snap.sync(at(500))
+  await settle()
+  styleCheck('换一份坐标后，图面跟着数据落位', Math.round(snap.cy.$('#R1').position('y')), 500)
+  styleCheck('同一批里的另一个节点一并落位', Math.round(snap.cy.$('#R2').position('y')), 500)
 }
 
 // 清理打包产物

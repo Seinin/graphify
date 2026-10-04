@@ -27,11 +27,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from './ui/dropdown'
-import { useGraphStore } from '../state/graphStore'
-import { tagDisplayOf } from '../lib/tagEdit'
+import { useGraphStore, type SaveState } from '../state/graphStore'
+import { bucketByGroup, tagDisplayOf } from '../lib/tagEdit'
 import { cn, relativeTime } from '../lib/utils'
 import { graphTopics, topicVisibleCount } from '../lib/topics'
 import { LAYOUT_LABELS, type LayoutKind } from '../graph/layout'
+import { tagGroupLabel } from '../graph/palette'
 import type { Graph } from '../lib/types'
 
 /** 手动摆放排在最前：它是默认布局，也是「大框套小框 + 箭头吸附」这套表达的前提 */
@@ -43,16 +44,17 @@ const GraphStatsPopover = lazy(() =>
 )
 
 /**
- * 应用内视图。两页：
- *   canvas = 工程视角图谱（`data/graph.json`，模块、数据流与关系，面向实现）；
- *   chain  = 物理链（`src/generated/physics-chain.json`，从观测量往下追到参数，面向物理）。
+ * 应用内视图。`chain` = 物理链（`src/generated/physics-chain.json`，从观测量往下追到参数，面向物理）
+ * 是站点对外唯一的一页；`canvas` = 工程视角图谱（`data/graph.json`，模块、数据流与关系，面向实现）
+ * 已不对外开放（见 change graphify-chain-only-entry），但类型里仍留着这个取值——画布那套渲染与交互
+ * 就是物理链页的实现底座，收窄联合类型会牵动一串判据（理由见该变更 design.md 的 D4）。
  *
- * 分段控件按"多于一项"才渲染——所以第二页接上后，顶栏的入口会自动出现。
+ * 分段控件按"多于一项"才渲染——VIEWS 只剩一项时，顶栏的入口自动消失。
  */
 export type GraphView = 'canvas' | 'chain'
 
+/** 对外只有物理链一页；`canvas` 不在这里，顶栏因此不出现页面切换控件 */
 const VIEWS: { id: GraphView; label: string; icon: typeof Waypoints; hint: string }[] = [
-  { id: 'canvas', label: '画布', icon: Waypoints, hint: '工程视角图谱：模块、数据流与关系（data/graph.json）' },
   {
     id: 'chain',
     label: '物理链',
@@ -98,6 +100,14 @@ interface TopBarProps {
   onOpenImport: () => void
   onOpenHistory: () => void
   onSave: () => void
+  /**
+   * 保存按钮报的状态：缺省＝共享 store（画布那张图）。
+   * 物理链页传自己那份——它保存的是这一页的手动摆放（`state/chainLayoutStore`），
+   * 报的也该是那一份的状态，而不是画布那张图的。
+   */
+  saveStatus?: { saveState: SaveState; dirty: boolean; lastSavedAt: string }
+  /** 保存按钮的说明；缺省是画布那句「另存为一份保留副本」 */
+  saveHint?: string
   onRename: (name: string) => void
   /** 当前标签页的模块名（主图为 null）：顶栏要显示「在图谱的哪一层」 */
   activeTabLabel?: string | null
@@ -130,13 +140,19 @@ export function TopBar({
   onOpenImport,
   onOpenHistory,
   onSave,
+  saveStatus,
+  saveHint,
   onRename,
   activeTabLabel = null,
   onToggleHelp,
 }: TopBarProps) {
-  const saveState = useGraphStore((state) => state.saveState)
-  const dirty = useGraphStore((state) => state.dirty)
-  const lastSavedAt = useGraphStore((state) => state.lastSavedAt)
+  const canvasSaveState = useGraphStore((state) => state.saveState)
+  const canvasDirty = useGraphStore((state) => state.dirty)
+  const canvasLastSavedAt = useGraphStore((state) => state.lastSavedAt)
+  /** 保存按钮报**当前这一页**的状态：画布页是共享 store，物理链页是它自己的手摆坐标 */
+  const saveState = saveStatus?.saveState ?? canvasSaveState
+  const dirty = saveStatus?.dirty ?? canvasDirty
+  const lastSavedAt = saveStatus?.lastSavedAt ?? canvasLastSavedAt
   const [nameDraft, setNameDraft] = useState(graph.meta.name)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [topicQuery, setTopicQuery] = useState('')
@@ -207,28 +223,23 @@ export function TopBar({
   }, [graph])
   const activeTagSet = useMemo(() => new Set(activeTagIds), [activeTagIds])
 
-  /** 分组副标题：把类名按词拆开显示（SimulationOptions → Simulation Options），数据里的类名不动 */
-  const groupLabel = (group: string) =>
-    (group || '未分类').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-
   /**
    * 参数按**代码里的划分**分组：`group` 就是 inputs.py 里 InputStruct 的子类名
    * （CosmoParams / MatterOptions / SimulationOptions / AstroOptions / AstroParams）。
-   * 分组顺序取注册表里的出现顺序（脚本按代码顺序写入），没写分类的排最后。
+   * 分组顺序取注册表里的出现顺序（脚本按代码顺序写入），没写分类的排最后——
+   * 分桶与组名的口径与右侧属性面板**同一份**（见 `bucketByGroup` / `tagGroupLabel`）。
    */
-  const tagGroups = useMemo(() => {
-    const buckets = new Map<string, typeof tags>()
-    tags.forEach((tag) => {
-      const key = (tag.group ?? '').trim()
-      const list = buckets.get(key)
-      if (list) list.push(tag)
-      else buckets.set(key, [tag])
-    })
-    return [...buckets.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : 0))
-  }, [tags])
+  const tagGroups = useMemo(() => bucketByGroup(tags, (tag) => tag.group), [tags])
 
+  /** 「没有改动」这一档是给"还没写过盘"的页面的：没存过就别报「已保存 · —」 */
   const saveLabel =
-    saveState === 'saving' ? '保存中…' : dirty ? '有未保存改动' : `已保存 · ${relativeTime(lastSavedAt)}`
+    saveState === 'saving'
+      ? '保存中…'
+      : dirty
+        ? '有未保存改动'
+        : lastSavedAt
+          ? `已保存 · ${relativeTime(lastSavedAt)}`
+          : '没有改动'
 
   return (
     <header className="glass-panel relative z-40 flex h-12 shrink-0 items-center gap-3 rounded-lg px-3">
@@ -349,7 +360,7 @@ export function TopBar({
           </>
         ) : null}
 
-        {/* 分段控件按"多于一项"才渲染：只画布一页时它没有意义（物理视角页回来会自动出现） */}
+        {/* 分段控件按"多于一项"才渲染：对外只有物理链一页，它不出现（画布加回 VIEWS 时自动回来） */}
         {VIEWS.length > 1 ? (
         <div className="ml-0.5 flex items-center gap-0.5 rounded-md border border-black/[0.08] bg-black/[0.03] p-0.5">
           {VIEWS.map((item) => (
@@ -535,7 +546,7 @@ export function TopBar({
                     {/* 分组标题就是代码里的类名，便于和 inputs.py 对照 */}
                     <div className="flex items-baseline justify-between px-2 pb-0.5 pt-2.5">
                       <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                        {groupLabel(group)}
+                        {tagGroupLabel(group)}
                       </span>
                       <span className="tabular-nums text-[10px] text-muted-foreground/50">{list.length}</span>
                     </div>
@@ -614,7 +625,13 @@ export function TopBar({
           </Button>
         </Tooltip>
 
-        <Tooltip content="另存为一份保留副本 (Ctrl/Cmd + S)">
+        {/*
+          保存按钮两页都在，保存的**不是同一样东西**：画布页写回那张图的工作文件并归档整图
+          （`data/graph.json`、`data/history/`），物理链页只写它这一页的手动摆放
+          （`data/chain-layout.json`，见 `state/chainLayoutStore`）。
+          所以状态（`saveStatus`）与说明（`saveHint`）都跟着视图走，不拿一套文案套两页。
+        */}
+        <Tooltip content={saveHint ?? '另存为一份保留副本 (Ctrl/Cmd + S)'}>
           <Button variant="secondary" size="sm" onClick={onSave}>
             <CloudUpload
               className={cn('h-3.5 w-3.5', saveState === 'saving' && 'animate-pulse')}

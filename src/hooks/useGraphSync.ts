@@ -60,9 +60,11 @@ export function useGraphSync() {
   const saveNow = useCallback(() => {
     const store = useGraphStore.getState()
     /**
-     * 物理链是**只读的生成物**：它由 `physics-chain.json` 驱动，页面上改不了。
-     * 若放它过去，坐标会被写进画布的工作文件、整图会被归档进画布的历史目录——都是污染。
-     * 这里统一挡住（Ctrl+S、顶栏保存按钮走的是同一条路）。
+     * 这一层只管画布那张图（`data/graph.json`）。物理链页的保存走它自己那条路：
+     * 存的是那一页的手动摆放（`state/chainLayoutStore` → `data/chain-layout.json`），
+     * 与这里无关（见 `App.tsx` 的快捷键分组）。
+     * 万一生成物被塞进这个 store，坐标会被写进画布的工作文件、整图会被归档进画布的历史目录——
+     * 都是污染，这里因此留一道兜底。
      */
     if ((store.graph.meta as { id?: string }).id === 'physics-chain') {
       toast.info('物理链是只读的，没有需要保存的改动')

@@ -163,5 +163,19 @@ export function parseInputStructs(text) {
       })
     }
   })
+
+  /**
+   * 私有存储 + 公有属性的写法：类体里能解析到的是 `_A_s`、`_DIM`、`_BOX_LEN` 这种带前导下划线的
+   * 字段名，对外的名字（`A_s` / `DIM`）写在 `@property` 上，字段名正则收不到。
+   * 真源按对外名字登记参数，用对外名字查表就会落空，连带丢掉类名、默认值与范围
+   * （表现是侧栏里那一组「未标类」）。所以补一条**去掉前导下划线**的别名：
+   * 对外名字已被别的字段占用时不补，不静默覆盖类体里真写出来的那个。
+   */
+  for (const [name, value] of [...params]) {
+    const publicName = name.replace(/^_+/, '')
+    if (!publicName || publicName === name || params.has(publicName)) continue
+    params.set(publicName, { ...value, name: publicName })
+  }
+
   return params
 }

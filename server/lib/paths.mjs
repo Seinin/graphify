@@ -27,6 +27,12 @@ export const DATA_DIR = process.env.GRAPHIFY_DATA_DIR
 /** 图谱主文件 */
 export const GRAPH_FILE = path.join(DATA_DIR, 'graph.json')
 
+/**
+ * 物理链页的手动摆放（工作文件）：`{ 节点 id: { x, y } }`。
+ * 与画布的工作文件分开——物理链的摆放与那张图无关（见 `lib/chainLayout.mjs`）。
+ */
+export const CHAIN_LAYOUT_FILE = path.join(DATA_DIR, 'chain-layout.json')
+
 /** 自动快照目录 */
 export const HISTORY_DIR = path.join(DATA_DIR, 'history')
 

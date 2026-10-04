@@ -9,8 +9,10 @@
  *
  * 三条硬规矩：
  *   1. **只读**：这张图由生成物驱动（真源 `docs/notes/physics-chain/chain.json`），页面上的
- *      编辑动作一律说明"只读"，不假装能用。保存（Ctrl+S / 保存按钮）也走不到这一页。
- *   2. **首屏只有物理**：一级只有 12 个块（10 个天体物理过程 + 2 个层）；工程节点（"实现细节"）贴在块**内部**的成员层，
+ *      编辑动作一律说明"只读"，不假装能用（文案见 `lib/physicsChainNotice`）。
+ *      **唯一的例外是节点摆放**：拖开一个节点只改本机，按保存（顶栏按钮 / Ctrl/Cmd + S）
+ *      写回 `data/chain-layout.json`，下次打开照它显示（见 `state/chainLayoutStore`）。
+ *   2. **首屏只有物理**：一级只有 11 个块（10 个天体物理过程 + 1 个层）；工程节点（"实现细节"）贴在块**内部**的成员层，
  *      走进块才出现——检索命中时会标出来源，但不因此把工程项提到一级来。
  *   3. 视图只读生成物：块的成员/接口、参数、开关、落点全部来自 `physics-chain.json`，界面不写死。
  */
@@ -25,8 +27,10 @@ import { GraphSourceProvider, type GraphSource } from '../graph/graphSource'
 import { TabBar } from './TabBar'
 /** 标签页的形状直接取自 `TabBar` 的入参（TabBar 没导出它的类型，也不猜字段） */
 type TabInfo = ComponentProps<typeof TabBar>['tabs'][number]
-import { type Graph, type GraphRef, type Selection, type SelectionKind } from '../lib/types'
+import { type Graph, type GraphRef, type NodeType, type Selection, type SelectionKind } from '../lib/types'
 import { SHOW_CROSS_REDSHIFT_FEEDBACK_KEY, readBooleanPreference, writeBooleanPreference } from '../lib/viewPreferences'
+import { readOnlyNotice } from '../lib/physicsChainNotice'
+import { useChainLayoutStore } from '../state/chainLayoutStore'
 import type { LayoutKind } from '../graph/layout'
 import {
   CHAIN_GRAPH,
@@ -37,8 +41,12 @@ import {
   chainProcessNote,
   paramBlocks,
   paramClassGroups,
+  paramAbsenceReason,
   paramEntryOf,
+  paramGateLabels,
+  paramGatedNodes,
   paramMatrixOf,
+  paramTouchedNodes,
   paramsOfProcess,
   processUncovered,
   processesOf,
@@ -51,13 +59,20 @@ import { ResizeHandle } from './ResizeHandle'
 import { PANEL_RAIL_WIDTH, usePanelWidth } from '../hooks/usePanelWidth'
 
 /**
+ * 图例里**不列**的要素种类：只有段容器（`group`）——它是装饰，不是要素种类
+ * （`graphify-physics-chain` 的「段容器不参与图例与标签」）。常数在模块级：引用稳定，
+ * 图例那段的 `useMemo` 才不会每次渲染都重算。
+ */
+const LEGEND_HIDDEN_TYPES: NodeType[] = ['group']
+
+/**
  * 生成物里这一页另外要读的那一段：效应开关（`gatesEdges` 就是它门控的那几条边，
  * "开关写在箭头上"的依据）。参数词条清单不再从这里手抄数组了——见 `paramClassGroups()`。
  */
 const ARTIFACT = chainArtifact as unknown as {
   params: {
     /** 效应开关：`gatesEdges` 就是它门控的那几条边（"开关写在箭头上"的依据） */
-    effects: { name: string; role?: string; default?: unknown; gatesEdges?: string[]; basis?: string }[]
+    effects: { name: string; role?: string; default?: unknown; gatesEdges?: string[] }[]
   }
 }
 
@@ -71,22 +86,17 @@ const SEARCH_PANEL_DEFAULT_WIDTH = 304
  * 生成物里的 `codeAnchor` 字段仍保留——它是"块与代码同构"的可证伪依据，被自检逐条断言。
  */
 
-const readOnlyNotice = () =>
-  toast.info('物理链是只读的', {
-    description: '这一页由 physics-chain.json 生成；要改请改真源 docs/notes/physics-chain/chain.json 后重新生成。',
-  })
-
 /**
  * 检查器里点话题 pill 的说明：这一页**不再按话题分层**，也没有话题过滤。
  *
- * 一级只讲 12 个块（10 个天体物理过程 + 2 个层）；「实现细节」这类工程节点贴在块**内部**的成员层，
+ * 一级只讲 11 个块（10 个天体物理过程 + 1 个层）；「实现细节」这类工程节点贴在块**内部**的成员层，
  * 走进那个块才看得到（检索命中时会标出来源）。所以这里只解释一句——
  * 点了却什么都没变，比不响应更糟。
  */
 const explainTopic = () =>
   toast.info('这一页不按话题分层', {
     description:
-      '一级只讲 12 个块（10 个天体物理过程 + 2 个层）；「实现细节」这类工程节点贴在块内部的成员层，走进那个块才看得到（检索命中时会标出来源）。',
+      '一级只讲 11 个块（10 个天体物理过程 + 1 个层）；「实现细节」这类工程节点贴在块内部的成员层，走进那个块才看得到（检索命中时会标出来源）。',
   })
 
 /** 顶栏检索的一次性定位请求；`nonce` 让"再点一次同一条结果"也能重新定位 */
@@ -123,7 +133,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
    */
   const [showFeedback, setShowFeedback] = useState(() => readBooleanPreference(SHOW_CROSS_REDSHIFT_FEEDBACK_KEY))
   /** 产物里的回流边：条数报给浮层上的开关，不写死（产物里没有这类边时开关会说明原因，而不是摆个空开关） */
-  const feedbackEdges = useMemo(() => CHAIN_GRAPH.edges.filter((edge) => edge.spanKind === 'feedback'), [])
+  const feedbackEdges = useMemo(() => CHAIN_GRAPH.edges.filter((edge) => edge.kind === 'feedback'), [])
   const applyFeedback = useCallback((next: boolean) => {
     setShowFeedback(next)
     writeBooleanPreference(SHOW_CROSS_REDSHIFT_FEEDBACK_KEY, next)
@@ -140,22 +150,24 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
    * 所以每条弧派生**两条**落点边（同一个端点对、同一档样式），各声明给弧的一端块（`subgraphOf`），
    * 把两侧不在场的那个量并进那一块的对外输入去灰显——否则这条边在那一侧根本没有第二个端点。
    *
-   * 端点、方向、标签全从产物算，页面不写死块名与量名；**产物与生成物一个字节都不动**。
+   * 端点与方向全从产物算，页面不写死块名与量名；**产物与生成物一个字节都不动**。
+   * 标签留空：落点边两端就是那两个量盒（`T_S(z)` → `Ṅ_ion(z)`），箭头上的文字只写跨块交付的量名
+   * （见 [G4 §3.2](../../../docs/notes/graphify/G4-物理链.md)），这里写了就是重复盒子名。
    *
    * 落点是同一件事的另两个视图面，显隐仍归浮层上那个开关：这里只标出"它落在哪一块、来处与去处是哪个量"
    * （`subgraphOf` 与 `inputOf` / `outputOf`），渲染器按开关切类名。投影因此与开关状态无关——
    * 开合不增删元素、不动坐标。
    */
   const feedbackInputs = useMemo(() => {
-    const arcs = CHAIN_GRAPH.edges.filter((edge) => edge.spanKind === 'feedback' && edge.fromNode && edge.toNode)
+    const arcs = CHAIN_GRAPH.edges.filter((edge) => edge.kind === 'feedback' && edge.fromNode && edge.toNode)
     const edges = arcs.flatMap((arc) => {
       const shared = {
         source: arc.fromNode as string,
         target: arc.toNode as string,
-        label: arc.label,
+        label: '',
         type: arc.type,
         directed: arc.directed,
-        spanKind: 'feedback-input' as const,
+        kind: 'feedback-input' as const,
         // 子图里就这三个盒子，不必绕开树脊；鼓起来的弧线留给一级上那两条
         crossLink: false,
         fromNode: arc.fromNode,
@@ -198,6 +210,26 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
   }, [])
 
   /**
+   * **手动摆放**（`state/chainLayoutStore`）：盘上那份覆盖层 + 本机改了还没保存的那份。
+   * 这里只做一件事——把它叠在生成物烘好的坐标上；页面挂载时读一次盘上那份。
+   *
+   * 拖完一个节点只记在本机（`onPositionsSettled`），按保存才写盘（按钮 / Ctrl/Cmd + S）。
+   * 与画布同一条路：不自动写盘，也就不会有"以为存了其实没存"的错觉。
+   */
+  const savedChainPositions = useChainLayoutStore((state) => state.saved)
+  const pendingChainPositions = useChainLayoutStore((state) => state.pending)
+  const noteChainPositions = useChainLayoutStore((state) => state.notePositions)
+  const loadChainLayout = useChainLayoutStore((state) => state.load)
+  /** 覆盖层优先于生成物的坐标；没记过的节点照生成物摆 */
+  const chainPositions = useMemo(
+    () => ({ ...savedChainPositions, ...pendingChainPositions }),
+    [savedChainPositions, pendingChainPositions],
+  )
+  useEffect(() => {
+    void loadChainLayout()
+  }, [loadChainLayout])
+
+  /**
    * 本页的图 = 产物 + 上面那份投影（**不写回产物**）：画布页读的还是 `data/graph.json`，与这里无关。
    * 并进对外输入只动视图的可见集与灰显样式——不复制节点、`parent` 不变，主图与层级计数都不受影响。
    * 回流的两端另标一份（`feedbackInputOf` / `feedbackOutputOf`）：它们是投影的一部分，
@@ -218,6 +250,11 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
         const extra = [...(readIn ?? []), ...(sentOut ?? [])].filter((id) => !(node.contexts ?? []).includes(id))
         return {
           ...node,
+          /**
+           * 手摆坐标：本机记下的（`chainLayoutStore`）盖住生成物那一份。
+           * **只有位置来自本机**，块与连线的其余字段逐字来自生成物。
+           */
+          ...(chainPositions[node.id] ? { position: chainPositions[node.id] } : {}),
           ...(extra.length ? { contexts: [...(node.contexts ?? []), ...extra] } : {}),
           ...(inputOf ? { feedbackInputOf: inputOf } : {}),
           ...(outputOf ? { feedbackOutputOf: outputOf } : {}),
@@ -225,7 +262,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
       }),
       edges: [...CHAIN_GRAPH.edges, ...feedbackInputs.edges],
     }),
-    [feedbackInputs],
+    [feedbackInputs, chainPositions],
   )
   const source: GraphSource = useMemo(
     () => ({
@@ -238,6 +275,13 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
       hiddenRelationIds,
       toggleHiddenRelations: (nodeId: string) =>
         setHiddenRelationIds((ids) => (ids.includes(nodeId) ? ids.filter((item) => item !== nodeId) : [...ids, nodeId])),
+      // 点画布空白：清选中，并熄灭本页四个来源的点亮（参数 / 过程词条、检索命中、点红点）
+      clearHighlight: () => {
+        select(null, null)
+        setActiveParam(null)
+        setActiveProcess(null)
+        setActiveTagIds([])
+      },
     }),
     [pageGraph, selection, select, hoveredNodeId, activeTagIds, hiddenRelationIds],
   )
@@ -255,7 +299,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
    * **子图（块）**：与画布页同一套做法——双击一个块就"进"到它里面（画布聚焦到该块），
    * 顶部标签条记着走过的层级，可以来回切。
    *
-   * 两个「层」（L0 常数与网格层 / L1 共享内核层）**不提供进入**：它们横切各块，没有一条自己的主序流
+   * 「层」（常数与网格）**不提供进入**：它没有一条自己的主序流
    * （`enterable` 由生成物按真源的 `kind` 给出：层一定为假）。拦在这里并说明一句，
    * 而不是让画布进去或"点了没反应"。
    */
@@ -274,12 +318,13 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
       /**
        * **没有子图的对象不给进**：进去是一张空画布，比"点了没反应"更糟。
        * 判据与「进入子图 ↗」旁边那个数字**同源**（`subgraphSizeOf`），两处不会各说各话。
-       * 这类对象多半在 ⑨观测量 里（如 `P_21`）：主序只到 δT_b，它是对 δT_b 做的后处理统计，
-       * 图上没有更深一层；它的源码与文献在右侧那条「源码 / 文献」标签页里。
+       * 而函数那一级不上图之后，**成员一律没有子图**（design.md D1）——它由哪几行算出，
+       * 读它的「源码」标签页与那篇模块文档的工程一节（实现步骤在那里逐个小节列出）。
        */
       if (subgraphSizeOf(nodeId) === 0) {
         toast.info(`「${labelOf(nodeId)}」没有子图`, {
-          description: '它是主序之外的量：没有更深一层（没有实现步骤），进去只会看到一张空画布。',
+          description:
+            '物理链的底就是量与过程：它下面是函数，那是"这个量由哪几行算出"的问题——读它的「源码」标签页与那篇文档的工程一节。',
         })
         return
       }
@@ -321,7 +366,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
         if (landing?.subgraphOf) openSubgraph(landing.subgraphOf)
         // 一级那条弧与它的落点同归开关管：点中即打开，不出现"选中了一条看不见的边"
         const isFeedback =
-          Boolean(landing) || CHAIN_GRAPH.edges.some((edge) => edge.id === id && edge.spanKind === 'feedback')
+          Boolean(landing) || CHAIN_GRAPH.edges.some((edge) => edge.id === id && edge.kind === 'feedback')
         if (isFeedback) applyFeedback(true)
         return
       }
@@ -432,10 +477,10 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
     onSelectionChange?.(selectionLabel)
   }, [selectionLabel, onSelectionChange])
   /**
-   * 直系子节点数：有子节点的模块才显示「进入子图 ↗」（数字现算，不写死）。
+   * 直系子节点数：有子对象的模块才显示「进入子图 ↗」（数字现算，不写死）。
    * 口径只有一处（lib 的 `subgraphSizeOf`）：**块报自己的成员数**（不可进入的层返回 0，
-   * 那条入口对 L0 / L1 两个层根本不出现），**成员报它自己的实现步骤数**——
-   * 「装在哪个块里」（`blockOf`）不是它自己的子节点，混用会让 ⑨观测量 里的量报出别的块的成员数。
+   * 那条入口对 L0 / L1 两个层根本不出现），**成员一律 0**——函数那一级不上图（design.md D1），
+   * 入口因此只出现在块上。「装在哪个块里」（`blockOf`）更不是它自己的子节点。
    */
 
   /**
@@ -456,11 +501,6 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
     return {
       kindLabel: block.kind === 'layer' ? '层' : '过程',
       isLayer: block.kind === 'layer',
-      /**
-       * 块的一级注释（真源 `note`）：为什么这么切、以及**量化事实**——
-       * L1 那句里逐个写着"头文件 被几个 .c 引用"（如 `cosmology.h 21`）。
-       */
-      note: block.note,
       members: block.members.map((id) => ({
         id,
         // 层的成员是文件（`cosmology.h`）：图上没有这个节点，`labelOf` 回落到 id ＝ 文件名本身
@@ -541,7 +581,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
 
   /**
    * 过程面词条与兜底名单**都读生成物**（`processes.items` / `processes.uncovered`）：
-   * 页面不写死过程名，也不替覆盖不到的量编名字（缺口要显示出来）。
+   * 页面不写死过程名；兜底名单现在为空（新增模块已就近立条），仍照读、不删字段。
    */
   const processEntries = useMemo(() => chainProcessEntries(), [])
   const processNote = useMemo(() => chainProcessNote(), [])
@@ -552,14 +592,14 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
 
   /**
    * 两条面**互相查找**：
-   *   · `litProcessIds`：选中参数时，过程面里"下辖的量被它读到"的那些行点亮；
+   *   · `litProcessIds`：选中参数时，过程面里"下辖的量被它碰到"的那些行点亮；
    *   · `litParamNames`：选中过程时，参数面里"作用于它下辖量"的那些行点亮。
-   * 两个名单都由既有的「参数 × 节点矩阵」+ 过程面的成员算出来，**不新增归属数据**。
+   * 两个名单都由既有的「参数 × 节点矩阵」+ 过程面的成员算出来，**不新增归属数据**；
+   * 判据取 `paramTouchedNodes`（矩阵落点 + 门控边两端）——与 `paramsOfProcess` 同源，两个方向才对得上。
    */
   const litProcessIds = useMemo(() => {
     if (!activeParam) return []
-    const nodes = paramMatrixOf(activeParam)?.nodes ?? []
-    return [...new Set(nodes.flatMap((id) => processesOf(id).map((item) => item.id)))]
+    return [...new Set(paramTouchedNodes(activeParam).flatMap((id) => processesOf(id).map((item) => item.id)))]
   }, [activeParam])
 
   const litParamNames = useMemo(
@@ -620,19 +660,27 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
   /**
    * 左栏脚上那段"它作用在哪"：类名（生成物里的 `group`）、落在哪几个块（矩阵反查块清单）、
    * 作用的量清单（可以逐个点过去）。三样都在页面里算好，面板只管渲染。
+   * 一个量都不直接作用时要分两种：开关类是**改走哪一支**（门控边两端就是它的去处，照样列出来点得过去），
+   * 真没有落点才写原因（代码里没有读点 / 链上没人认领那段代码）——`作用于 无` 说不清是哪一种。
    */
   const activeParamEffect = useMemo<ChainParamEffect | null>(() => {
     if (!activeParam) return null
+    const nodes = (paramMatrixOf(activeParam)?.nodes ?? []).map((id) => ({ id, label: labelOf(id) }))
+    const gated = paramGatedNodes(activeParam).map((id) => ({ id, label: labelOf(id) }))
     return {
       name: activeParam,
       group: paramEntryOf(activeParam)?.group ?? PARAM_GROUP_FALLBACK,
       blocks: paramBlocks(activeParam),
-      nodes: (paramMatrixOf(activeParam)?.nodes ?? []).map((id) => ({ id, label: labelOf(id) })),
+      nodes,
+      gated,
+      gateLabels: paramGateLabels(activeParam),
+      note: nodes.length ? undefined : gated.length ? '它不改量的值，改的是走哪一支' : paramAbsenceReason(activeParam),
       /**
        * 这些量挂在哪些**过程面词条**下（两条面互相查找的入口）：点它切到过程面并选中那条。
        * 一个量可能同时挂在多条过程下——所以是数组，`Set` 去的只是同一段对象。
+       * 门控边的两端也算（开关落在哪条过程上）：与 `paramsOfProcess` 同源，两个方向才对得上。
        */
-      processes: [...new Set((paramMatrixOf(activeParam)?.nodes ?? []).flatMap((id) => processesOf(id)))].map((item) => ({
+      processes: [...new Set(paramTouchedNodes(activeParam).flatMap((id) => processesOf(id)))].map((item) => ({
         id: item.id,
         label: item.label,
       })),
@@ -714,7 +762,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
             layout={layout}
             connectSource={null}
             refDragPayload={null}
-            // 一级不做话题过滤（12 个块里没有一件要藏的）：传 null ＝ 整图不过滤
+            // 一级不做话题过滤（11 个块里没有一件要藏的）：传 null ＝ 整图不过滤
             topicFilter={null}
             topicKey="chain"
             /*
@@ -726,6 +774,17 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
               count: feedbackEdges.length,
               onToggle: () => applyFeedback(!showFeedback),
             }}
+            /*
+             * 图例里「数据流」这一档在本页叫「同一红移内的数据流」：页面上同时可能画着跨红移回流，
+             * 两条只有靠这个名字才对得上（`graphify-physics-chain` 的图例要求）。
+             * 其余几档照通用名（提供 / 数据流动、对外输入、条件 / 可选…），本页的叫法与它们逐字一致。
+             */
+            legendEdgeLabels={{ flow: '同一红移内的数据流' }}
+            /*
+             * 段容器是装饰，不当要素种类：本页图例因此不列「大框」。
+             * 画布页的层带照旧列（`graphify-canvas-appearance` 的「按要素种类着色」）——两页口径不同。
+             */
+            legendHiddenTypes={LEGEND_HIDDEN_TYPES}
             onLayoutChange={setLayout}
             onEnterSubgraph={openSubgraph}
             onOpenTagDetail={(nodeId, tagId) => {
@@ -743,7 +802,12 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
             onRequestDeleteEdge={readOnlyNotice}
             onFocusLibrary={readOnlyNotice}
             onOpenImport={readOnlyNotice}
-            onPositionsSettled={() => {}}
+            /*
+             * 落点只记在本机（`chainLayoutStore`）：这一页没有自动保存，
+             * 按保存（顶栏按钮 / Ctrl/Cmd + S）才写回 `data/chain-layout.json`。
+             * 写进去的只有位置——块与连线的数据仍逐字来自生成物。
+             */
+            onPositionsSettled={noteChainPositions}
             onPositionEditStart={() => {}}
             registerApi={(api) => {
               canvasApi.current = api
@@ -760,7 +824,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
 
         {/* 左上：画布上的浮层只留"跟手上这一下有关"的东西——词条与检索已经搬去左栏（真侧栏，不压画布） */}
         <div className="pointer-events-none absolute left-4 top-4 max-w-[22rem] space-y-2">
-          {/* 选中连线时：箭头上的开关（是哪个开关、默认值、关掉会怎样；依据默认收起） */}
+          {/* 选中连线时：箭头上的开关（是哪个开关、默认值、关掉会怎样） */}
           {selectedEdge ? (
             <div className="pointer-events-auto w-[21rem] rounded-lg border border-slate-200 bg-white/94 px-3 py-2 shadow-sm backdrop-blur">
               <div className="text-[12px] font-semibold text-slate-800">
@@ -778,12 +842,6 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">默认 {String(effect.default)}</span>
                       </div>
                       {effect.role ? <p className="mt-1 text-[11px] leading-5 text-slate-600">{effect.role}</p> : null}
-                      {effect.basis ? (
-                        <details className="mt-1">
-                          <summary className="cursor-pointer text-[11px] text-slate-500">看依据（代码读点）</summary>
-                          <p className="mt-1 text-[11px] leading-5 text-slate-500">{effect.basis}</p>
-                        </details>
-                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -831,6 +889,13 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
          * 连叶子（成员量）也不给勾，全页只读。
          */
         tagsEditable={false}
+        /*
+         * 同理关掉节点字段：这一页的名称、类型、层级与摘要都来自生成物，
+         * 在屏幕上改它只会让页面跟产物对不上；而「所属大框」「条件（虚线框）」是画布上的
+         * 编组与可选标记，这一页一个都没有——摆上来只会是"（顶层 · 不在任何大框里）"
+         * 这种改不动的控件。摘要因此不再是输入框，而是把生成物里那一段印出来。
+         */
+        nodeEditable={false}
         // 块属性页（成员明细）：只在选中块时递进来，通用页从不传它
         blockDetail={blockDetail}
         // 灰显的对外输入：只在"当前块把它列成对外输入"时成立（其余场合不出现这一句）

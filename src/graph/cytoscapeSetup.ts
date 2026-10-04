@@ -1,20 +1,22 @@
-import cytoscape, { type Core, type EventObject, type NodeSingular, type Position } from 'cytoscape'
+import cytoscape, { type Core, type EdgeSingular, type EventObject, type NodeSingular, type Position } from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 import { buildStylesheet } from './styles'
 import { DEFAULT_LAYOUT_KIND, runLayout, type LayoutKind } from './layout'
 import {
+  EDGE_STYLE_ORDER,
   NODE_BOX_HEIGHT,
   NODE_BOX_HOVER_SCALE,
   NODE_BOX_WIDTH,
   TAG_DOT_INSET,
   TAG_DOT_SIZE,
+  type EdgeStyleId,
 } from './palette'
 import { hitTestNode, measureBoxSize, measureGroupSize } from './labels'
 import { buildHierarchy, tabContextIds, tabVisibleIds, type Hierarchy, type HierarchyNode } from './hierarchy'
 import { packVisible } from './pack'
 import { runOrderedLayout } from './ordered'
 import { ignoredPositionIds } from './positions'
-import { NODE_TYPE_LABELS, type ArrowPort, type Graph, type NodeType } from '../lib/types'
+import { NODE_TYPE_LABELS, NODE_TYPE_ORDER, type ArrowPort, type Graph, type NodeType } from '../lib/types'
 import { tagDisplayOf } from '../lib/tagEdit'
 import type { TopicVisibility } from '../lib/topics'
 
@@ -119,6 +121,40 @@ export interface RendererHandlers {
  * 模块的子节点不出现在这里——它们属于模块自己的标签页（另一个渲染器实例）。
  * 因此本类没有「展开集合 / 钻取路径 / 每屏预算」这套状态，只有同步、可见性套用与交互分发。
  */
+/**
+ * 一条边此刻落在**哪一档线型**上（图例用）。
+ *
+ * 判据是元素此刻带着的类名与属性，而不是数据字段——"画成什么样"这件事本来就只有元素知道：
+ * `cross-link` / `feedback(-input)` / `context-edge` / `conditional` 都是渲染器按数据挂上去的类。
+ *
+ * **次序与 `styles.ts` 里那几条规则的先后反过来**：cytoscape 是后写的规则胜（见 `styles.ts` 里
+ * 「位置」那几段注释），所以样式表里排得靠后的那条才是**最后落笔**的那条，也就该先判。
+ * 踩过：**回流边两个标记都是真**（数据里 `crossLink` 与 `kind: 'feedback'` 同时为真，接口边那 21 条
+ * 也带 `crossLink`），原先先判 `cross-link`，于是画布画的是回流那笔品红长划、图例却报出
+ * 「提供 / 数据流动」的紫色实线样例——线型那一列与实际画法对不上，读者没法解码。
+ * 同一档可以收多种数据来源：`flow` 既收 `depends_on` 也收 `derives_from`。
+ */
+function edgeStyleOf(edge: EdgeSingular): EdgeStyleId {
+  // 先判落笔在后的：feedback(-input) ← cross-link ← conditional ← context-edge（均在 `styles.ts`）
+  if (edge.hasClass('feedback') || edge.hasClass('feedback-input')) return 'feedback'
+  if (edge.hasClass('cross-link')) return 'cross-link'
+  if (edge.hasClass('conditional')) return 'conditional'
+  if (edge.hasClass('context-edge')) return 'context'
+  const type = edge.data('type') as string | undefined
+  if (type === 'contradicts') return 'contradicts'
+  if (type === 'relates_to') return 'relates_to'
+  if (!edge.data('directed')) return 'undirected'
+  return 'flow'
+}
+
+/**
+ * 判定「数据坐标与图面坐标是同一处」的容差。
+ *
+ * 存档坐标是取整回写的（见 `graph/positions.ts`），浮点往返会差出 1e-13 量级；
+ * 门槛取 0.5 即可（远小于排版间距 GAP=24，不会把「挪了一个小格」判成没动）。
+ */
+const POSITION_EPSILON = 0.5
+
 export class GraphRenderer {
   private cy: Core | null = null
   private handlers: RendererHandlers
@@ -374,6 +410,47 @@ export class GraphRenderer {
       marks.push({ nodeId: node.id(), tagId: tagIds[0], x: box.x1, y: box.y1, zoom: cy.zoom() })
     })
     return marks
+  }
+
+  /**
+   * 画布此刻**真画出来的**线型清单——图例里「线」那一段的条目就是它。
+   *
+   * 为什么从元素而不是从数据算：数据里 `edge.conditional` 是源头，但此刻画不画还取决于
+   * 开关（关着的跨红移回流是 `display: none`）、当前在哪个标签页（别的块的子图边也是 `display: none`）、
+   * 以及关系有没有被收起。从数据算会把"此刻没画出来"的条目也列上，图例于是说了谎。
+   *
+   * 只在**可见性算完之后**调（`sync` / 可见性变化都已经算过），因此这里只读结果、不改任何状态。
+   */
+  presentEdgeStyles(): EdgeStyleId[] {
+    const cy = this.cy
+    if (!cy) return []
+    const present = new Set<EdgeStyleId>()
+    cy.edges().forEach((edge) => {
+      if (!edge.visible()) return
+      present.add(edgeStyleOf(edge))
+    })
+    return EDGE_STYLE_ORDER.filter((id) => present.has(id))
+  }
+
+  /**
+   * 画布此刻**真画出来的**要素种类清单——图例里「要素」那一段的条目就是它。
+   *
+   * 与线型同一套理由（见上）：数据里每个节点都带着 `type`，但此刻画不画还取决于
+   * 话题开关（收着的那条话题整体 `display: none`）、当前在哪个标签页（别的块的成员不在这一屏）、
+   * 以及分支有没有展开。从数据算会把"此刻没画出来"的种类也列上，图例于是列了画布上找不到的东西。
+   *
+   * 只在**可见性算完之后**调（`sync` / 可见性变化都已经算过），因此这里只读结果、不改任何状态。
+   * 顺序走 `NODE_TYPE_ORDER`：一屏里种类不少，条目次序不该随元素遍历次序漂。
+   */
+  presentNodeTypes(): NodeType[] {
+    const cy = this.cy
+    if (!cy) return []
+    const present = new Set<NodeType>()
+    cy.nodes().forEach((node) => {
+      if (!node.visible()) return
+      present.add(node.data('type') as NodeType)
+    })
+    return NODE_TYPE_ORDER.filter((type) => present.has(type))
   }
 
   /**
@@ -667,7 +744,8 @@ export class GraphRenderer {
     this.rebuildHierarchy()
     this.groupIds = new Set(graph.nodes.filter((node) => node.type === 'group').map((node) => node.id))
 
-    // 模块标记按**原始数据**的直系子节点数算（与话题过滤无关）：徽标含义是「进去能看到几个」
+    // 模块标记按**原始数据**的直系子节点数算（与话题过滤无关）：这个数只喂属性页的「进入子图 ↗」
+    // 那一条入口，不再印到模块名后面（模块名的尾巴上没有数字）
     const childCountOf = new Map<string, number>()
     graph.nodes.forEach((node) => {
       if (!node.parent) return
@@ -720,6 +798,10 @@ export class GraphRenderer {
          * 一屏里的框因此互不相同、但都由内容决定（「大小成比例」的来源）。
          * 大框的最小尺寸也一并算，避免空框塌成一条线。
          */
+        /**
+         * 尺寸的来源只有两档：容器给**下限**（真正大小由子节点撑开，见样式表的 `min-width / min-height`），
+         * 其余按名字算。段容器走的是前一档——它必须装下本段的块，按名字算不出这个宽度。
+         */
         const size = isGroup ? measureGroupSize(node.label) : measureBoxSize(node.label)
         /**
          * 红点 / 命中用的标签：与属性面板取的是**同一份口径**（`tagDisplayOf`）——
@@ -745,7 +827,7 @@ export class GraphRenderer {
            * 判据只有一处（生成物里的 `block.enterable`），画布不自己重算连通性。
            */
           enterable: node.enterable !== false,
-          branchLabel: `${node.label} · ${childCount}`,
+          branchLabel: node.label,
           boxW: size.width,
           boxH: size.height,
           textMaxW: size.textMaxWidth,
@@ -775,6 +857,22 @@ export class GraphRenderer {
           ;(element as NodeSingular).removeStyle('width')
           ;(element as NodeSingular).removeStyle('height')
           if (this.hoveredId === node.id) this.applyHoverSize(element as NodeSingular)
+          /**
+           * 已有元素的坐标也要跟着数据走。
+           *
+           * 坐标只在 `cy.add` 时写入的话，**换一份数据**（回滚快照 / 载入保留副本 / 外部改了工作文件）
+           * 就只换节点属性而把图面钉在原位——表现成「回滚了但版面没变」，看着像回滚不生效。
+           * 判据是「数据坐标 != 图面坐标」：本机拖拽与自动排布都会先把新坐标回写进 store，
+           * 下一次同步时两边已经相等，因此这条与「手动摆放不自动重排」不冲突。
+           * 容器的坐标由子节点包围盒推出来（见 childBoxOf），不在这一档写。
+           */
+          if (!isGroup && position) {
+            const current = (element as NodeSingular).position()
+            const moved =
+              Math.abs(current.x - position.x) >= POSITION_EPSILON ||
+              Math.abs(current.y - position.y) >= POSITION_EPSILON
+            if (moved) (element as NodeSingular).position({ x: position.x, y: position.y })
+          }
           return
         }
         added.push(node.id)
@@ -824,13 +922,13 @@ export class GraphRenderer {
         if (element.length && element.isEdge()) {
           element.data(data)
           element.toggleClass('conditional', Boolean(edge.conditional))
-          // 跨层捷径（只有物理链页会带 crossLink 字段，工程图谱因此完全不受影响）
+          // 提供 / 数据流动（只有物理链页会带 crossLink 字段，工程图谱因此完全不受影响）
           element.toggleClass('cross-link', Boolean(edge.crossLink))
           // 跨红移回流（同样只有物理链页会带这个标记）：独立类名，样式与「默认不画」都按它判
-          element.toggleClass('feedback', edge.spanKind === 'feedback')
+          element.toggleClass('feedback', edge.kind === 'feedback')
           // 它在子图里的落点：与上面那档同一样式，「关着就不画」也共用同一条规则
           // （选择器 `edge.feedback-input.feedback-off`）；类名分开只为区分谁在一级、谁在子图
-          element.toggleClass('feedback-input', edge.spanKind === 'feedback-input')
+          element.toggleClass('feedback-input', edge.kind === 'feedback-input')
           return
         }
         if (!cy.getElementById(edge.source).length || !cy.getElementById(edge.target).length) return
@@ -840,8 +938,8 @@ export class GraphRenderer {
           classes: [
             edge.conditional ? 'conditional' : '',
             edge.crossLink ? 'cross-link' : '',
-            edge.spanKind === 'feedback' ? 'feedback' : '',
-            edge.spanKind === 'feedback-input' ? 'feedback-input' : '',
+            edge.kind === 'feedback' ? 'feedback' : '',
+            edge.kind === 'feedback-input' ? 'feedback-input' : '',
           ]
             .filter(Boolean)
             .join(' '),

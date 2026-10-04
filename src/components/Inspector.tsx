@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { Formula } from './Formula'
 import { Badge, DotBadge, Separator } from './ui/badge'
 import { Button } from './ui/button'
 import { Field, Input, Textarea } from './ui/input'
@@ -66,13 +67,8 @@ export interface RelationItem {
 export interface BlockDetail {
   /** 块类型的人话标签（「过程 / 可进入」还是「层 / 不可进入」由调用方给出） */
   kindLabel: string
-  /** 是不是**层**（L0 常数与网格层 / L1 共享内核层）：成员是文件、成员之间没有因果连线 */
+  /** 是不是**层**（常数与网格）：成员是常数、成员之间没有因果连线 */
   isLayer: boolean
-  /**
-   * 块的一级注释（真源 `blocks.items[].note`）：为什么这么切，以及量化事实——
-   * L1 那句里逐个写着"头文件 被几个 `.c` 引用"（如 `cosmology.h 21`），是这一层唯一的量化呈现。
-   */
-  note?: string
   /**
    * 成员明细：点一下即选中该成员。
    *
@@ -130,6 +126,16 @@ interface InspectorProps {
    * 两个条件都成立才给编辑入口。
    */
   tagsEditable?: boolean
+  /**
+   * **这一页**的节点字段能不能改（默认能）。物理链页整页读生成物 → 传 `false`：
+   *   · 名称 / 类型 / 参数数 / 所属大框 / 条件这些控件都不出现——名字与类型在抬头已经读到，
+   *     「所属大框」与「条件（虚线框）」是画布上的编组与可选标记，那一页两样都没有
+   *     （生成物里每个节点都是 `conditional: false`，一条虚线框都不画）；
+   *   · 摘要不再是输入框，而是把生成物里那一段**印出来**；
+   *   · 「从此节点拉出关系」与「删除节点」两个动手入口一并退场（那一页的编辑回调本来就只接成只读提示）。
+   * 与 `tagsEditable` 是两件事、分开传：这里关的是"改这个节点"，标签另有它自己的口径。
+   */
+  nodeEditable?: boolean
   /** 选中节点的全部关系（含跨层），点击可选中该关系 */
   relations?: RelationItem[]
   /**
@@ -146,7 +152,7 @@ interface InspectorProps {
    * 没有这一句，用户看到的就是"一个灰着的、点开却什么都没有的盒子"。
    */
   contextNote?: string | null
-  /** 全局标签注册表：标签编辑从这里多选，明细区块用它显示名称与说明 */
+  /** 参数注册表：编辑入口从这里多选，明细区块用它显示名称与说明 */
   tagRegistry?: TagDefinition[]
   /** 由点画布红点带过来的标签 id：该标签的明细自动展开 */
   activeTagId?: string | null
@@ -195,6 +201,7 @@ export function Inspector({
   groupOptions = [],
   childCount = 0,
   tagsEditable = true,
+  nodeEditable = true,
   nodes,
   onEnterSubgraph,
   relations = [],
@@ -260,7 +267,7 @@ export function Inspector({
   const tagDisplay = node ? tagDisplayOf(nodes, node) : { tags: [], tagDetails: {} }
 
   const tagReadOnlyNote =
-    childCount > 0 ? '只读 · 标签来自子图成员，要改去成员上改' : '只读 · 这一页只读，标签来自源码扫描'
+    childCount > 0 ? '只读 · 参数来自子图成员，要改去成员上改' : '只读 · 这一页只读，参数来自源码扫描'
 
 
 
@@ -285,9 +292,11 @@ export function Inspector({
    *
    * 卡片第二行只给**不带目录的文件名**（`SpinTemperatureBox.c:120-145`），完整路径退到 `title`。
    *
-   * **「源码」这一类在 `collapsed` 下按文件归并**：一个文件一条，主行就是文件名（`codeRefFileName`），
-   * 行区间逐条列在下面、每条可点即开。理由：一个模块的落点常常挤在同一个文件里（19 条落点铺 19 张卡
-   * 里有一半在同一个 `.c` 上），而成员名标题在同一面板的「成员明细」上方已经出现过一遍。
+   * **两类清单都按「同一个目标」归并**：源码按**文件**、文献按**文档**。一个文件一条，主行就是
+   * 文件名（`codeRefFileName` / `refLocationShort`），同一目标上的多个落点逐条列在下面、每条可点即开。
+   * 理由同一条：一个块的证据常常全落在同一处——落点挤在同一个 `.c` 上、成员锚点全落在它自己那一篇
+   * `.md` 里（逐锚点铺卡＝同一个文件名印 N 遍），而成员名标题在同一面板的「成员明细」上方已经出现过一遍。
+   * 于是标签上的条数：源码＝落点条数、**文献＝文档数**——一个模块只有它自己那一篇笔记，写「文献 1」。
    * 画布页的清单（`inline`）不归并：那里引用可增删，合并会把删除的粒度拆掉。
    */
   const renderRefs = (target: GraphNode) => {
@@ -396,14 +405,67 @@ export function Inspector({
       </li>
     )
 
+    /**
+     * 笔记清单按**文档**归并：同一篇笔记上的多个锚点合成一条，主行印文档名。
+     * 分组按引用在数组里的首次出现顺序（生成物已按 `docId`→`anchor` 排好，这里不重排）。
+     */
+    const docGroups = (refs: GraphRef[]) => {
+      const groups = new Map<string, GraphRef[]>()
+      for (const ref of refs) {
+        const docId = String(ref.docId ?? '')
+        const bucket = groups.get(docId)
+        if (bucket) bucket.push(ref)
+        else groups.set(docId, [ref])
+      }
+      return [...groups.entries()].map(([docId, list]) => ({ docId, refs: list }))
+    }
+
+    /**
+     * 归并后的文献卡片：**主行＝文档名**（点它开这一篇的第一个锚点），下面一行是这篇里的各个锚点，
+     * 每个自己可点（`title` 给完整落点）。整卡没有删除按钮——`collapsed` 是可读页。
+     */
+    const docCard = (docId: string, list: GraphRef[]) => (
+      <li
+        key={docId}
+        className="group flex items-start gap-2 rounded-md border border-black/[0.07] bg-black/[0.03] px-2.5 py-2 transition-colors hover:border-primary/35 hover:bg-primary/[0.06]"
+      >
+        <FileText className="mt-[2px] h-3.5 w-3.5 shrink-0 text-cyan-700/80" />
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => onOpenRef(list[0])}
+            title={docId}
+            className="block max-w-full cursor-pointer truncate text-left font-mono text-micro font-medium text-foreground/90"
+          >
+            {refLocationShort(list[0])}
+          </button>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {list.map((ref, index) => (
+              <button
+                key={`${refLocation(ref)}-${index}`}
+                type="button"
+                onClick={() => onOpenRef(ref)}
+                title={refLocation(ref)}
+                className="max-w-full cursor-pointer truncate rounded-[4px] bg-black/[0.05] px-1 text-left text-micro text-muted-foreground/75 transition-colors hover:bg-primary/[0.12] hover:text-foreground"
+              >
+                {ref.label || ref.anchor || '正文'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </li>
+    )
+
+    /** 归并后的分组只算一次：标签上的条数与铺出来的卡片必须是同一份 */
+    const docGroupsList = docGroups(docRefs)
+
     /** 标签页：只列**非空**的那几类（不出现「源码 0」这种把入口藏起来的写法） */
     const tabs = [
       { id: 'impl' as const, Icon: FileCode, text: '源码', count: codeRefs.length, tone: 'text-teal-700/80' },
-      { id: 'paper' as const, Icon: FileText, text: '文献', count: docRefs.length, tone: 'text-cyan-700/80' },
+      { id: 'paper' as const, Icon: FileText, text: '文献', count: docGroupsList.length, tone: 'text-cyan-700/80' },
     ].filter((tab) => tab.count > 0)
     /** 选中的那一类；它要是这一节点上不存在（如只在代码一类），就当没选 */
     const active = tabs.some((tab) => tab.id === evidenceTab) ? evidenceTab : null
-    const activeRefs = active === 'impl' ? codeRefs : docRefs
 
     return (
       <section className="flex flex-col gap-2">
@@ -468,11 +530,11 @@ export function Inspector({
                 </button>
               ))}
             </div>
-            {active && activeRefs.length ? (
+            {active ? (
               <ul role="tabpanel" className="flex flex-col gap-1.5">
                 {active === 'impl'
                   ? codeGroups(codeRefs).map((group) => codeCard(group.file, group.refs))
-                  : activeRefs.map((ref) => card(ref, target.refs.indexOf(ref)))}
+                  : docGroupsList.map((group) => docCard(group.docId, group.refs))}
               </ul>
             ) : null}
           </>
@@ -506,6 +568,9 @@ export function Inspector({
    * （接口边静息不画、悬浮显现，见 `graph/styles.ts` 的 `edge[?focusOnly]`），
    * 右侧栏再铺一张进出清单是重复。
    *
+   * **不再印块的一级注释**：那句话在**摘要位置**（就在这一段上方）已经读到，这里只列成员；
+   * 字段本身仍在生成物与真源里（自检逐条断言它非空）。
+   *
    * 成员列表可点 → 选中该成员。
    */
   const renderBlock = (block: BlockDetail) => {
@@ -517,15 +582,10 @@ export function Inspector({
           块 · {block.kindLabel}
         </h3>
 
-        {/* 块的一级注释：为什么这么切 + 量化事实（L1 的 #include 计数就在这句里） */}
-        {block.note ? (
-          <p className="text-micro leading-relaxed text-muted-foreground/85">{block.note}</p>
-        ) : null}
-
         <div className="flex items-center justify-between">
           <h4 className="text-micro font-medium text-foreground/85">成员明细（{block.members.length}）</h4>
           <span className="shrink-0 text-micro text-muted-foreground/70">
-            {block.enterable ? '块内连通 · 可进入' : block.isLayer ? '横切层 · 不可进入' : '成员互不相连 · 不可进入'}
+            {block.enterable ? '块内连通 · 可进入' : block.isLayer ? '层 · 不可进入' : '成员互不相连 · 不可进入'}
           </span>
         </div>
         <ul className="flex flex-col gap-1">
@@ -573,7 +633,7 @@ export function Inspector({
                   <div className="flex items-center gap-2">
                     <DotBadge color={NODE_TYPE_COLORS[node.type]}>{NODE_TYPE_LABELS[node.type]}</DotBadge>
                     <Badge tone="muted">
-                      {node.refs.length} 引用 · {tagDisplay.tags.length} 标签
+                      {node.refs.length} 引用 · {tagDisplay.tags.length} 参数
                     </Badge>
                   </div>
                   <h2 className="mt-2 truncate text-tiny font-semibold text-foreground/92" title={node.label}>
@@ -623,85 +683,96 @@ export function Inspector({
                     </div>
                   ) : null}
 
-                  <Field label="节点名称">
-                    <Input
-                      value={label}
-                      onChange={(event) => setLabel(event.target.value)}
-                      onBlur={commitNodeLabel}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') commitNodeLabel()
-                        if (event.key === 'Escape') setLabel(node.label)
-                      }}
-                    />
-                  </Field>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="类型">
-                      <Select value={node.type} onValueChange={(value) => onPatchNode({ type: value as NodeType })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {NODE_TYPE_ORDER.map((item) => (
-                            <SelectItem key={item} value={item}>
-                              {NODE_TYPE_LABELS[item]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field label="标签数" hint="看和改都在下方「全局标签」里（只有叶子能编）">
-                      <div className="flex h-8 items-center rounded-md border border-black/10 bg-black/[0.03] px-2.5 text-micro text-muted-foreground">
-                        {tagDisplay.tags.length} 个已归属
-                      </div>
-                    </Field>
-                  </div>
-
                   {/*
-                    这里原先有一行「阶段号」（生成物写在**量**上的只读属性 `codeHints` 的第一段）。
-                    已撤：它是点不开的摘要，回答不了"这段代码在哪"，而且它是代码坐标、不是这一页的名字。
-                    量的落点改由「源码」标签页给（文件 + 行区间，可点即开）。
-                    字段仍是**数据**（`stage` / `codeHints`）与**检索命中面**（按 `S14` 仍能查到），
-                    只是不再有任何界面出口——命中说明里也不印它。
+                    可编页面才有下面这些字段（`nodeEditable`）：
+                       · 节点名称与类型——只读那一页的抬头已经印着名字与类型，再给一遍更可读的控件没意义；
+                       · 所属大框与条件——它们是画布上的编组与虚线框，物理链那一页两样都没有
+                         （生成物里每个节点都是 `conditional: false`），
+                         只会在每个块上都显示"（顶层 · 不在任何大框里）"这种改不动的控件。
                   */}
+                  {nodeEditable ? (
+                    <>
+                      <Field label="节点名称">
+                        <Input
+                          value={label}
+                          onChange={(event) => setLabel(event.target.value)}
+                          onBlur={commitNodeLabel}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') commitNodeLabel()
+                            if (event.key === 'Escape') setLabel(node.label)
+                          }}
+                        />
+                      </Field>
 
-                  {/* 全局标签的编辑入口**不在这里**：它跟着明细一起住在下方那唯一的
-                      「全局标签」区块的标题行里（见 NodeTags.tsx 的 NodeTagSection）。
-                      从前这里另有一排可编的胶囊，同一份归属有两处实现，已撤销。 */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="类型">
+                          <Select value={node.type} onValueChange={(value) => onPatchNode({ type: value as NodeType })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {NODE_TYPE_ORDER.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                  {NODE_TYPE_LABELS[item]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field label="参数数" hint="看和改都在下方「参数」里（只有叶子能编）">
+                          <div className="flex h-8 items-center rounded-md border border-black/10 bg-black/[0.03] px-2.5 text-micro text-muted-foreground">
+                            {tagDisplay.tags.length} 个已归属
+                          </div>
+                        </Field>
+                      </div>
 
-                  {/* 大框归属：手动建立层级的第二种入口（第一种是画布上把节点拖进大框） */}
-                  <Field label="所属大框" hint="画布上拖进框里也可以">
-                    <Select
-                      value={node.parent ?? NO_GROUP}
-                      onValueChange={(value) => onPatchNode({ parent: value === NO_GROUP ? null : value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_GROUP}>（顶层 · 不在任何大框里）</SelectItem>
-                        {groupOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                      {/*
+                        这里原先有一行「阶段号」（生成物写在**量**上的只读属性 `codeHints` 的第一段）。
+                        已撤：它是点不开的摘要，回答不了"这段代码在哪"，而且它是代码坐标、不是这一页的名字。
+                        量的落点改由「源码」标签页给（文件 + 行区间，可点即开）。
+                        字段仍是**数据**（`stage` / `codeHints`）与**检索命中面**（按 `S14` 仍能查到），
+                        只是不再有任何界面出口——命中说明里也不印它。
+                      */}
 
-                  {/* 条件 / 可选：画布上用虚线框表达（对应流程图的「这一步只在某些配置下才存在」） */}
-                  <div className="flex h-8 items-center justify-between rounded-md border border-black/10 bg-black/[0.03] px-2.5">
-                    <span
-                      className="text-micro text-muted-foreground"
-                      title="虚线框：这一步只在某些配置下才存在（例如「仅 lagrangian 源模型」）"
-                    >
-                      条件 / 可选（虚线框）
-                    </span>
-                    <Switch
-                      checked={Boolean(node.conditional)}
-                      onCheckedChange={(value) => onPatchNode({ conditional: value })}
-                    />
-                  </div>
+                      {/* 参数的编辑入口**不在这里**：它跟着明细一起住在下方那唯一的
+                          「参数」区块的标题行里（见 NodeTags.tsx 的 NodeTagSection）。
+                          从前这里另有一排可编的胶囊，同一份归属有两处实现，已撤销。 */}
+
+                      {/* 大框归属：手动建立层级的第二种入口（第一种是画布上把节点拖进大框） */}
+                      <Field label="所属大框" hint="画布上拖进框里也可以">
+                        <Select
+                          value={node.parent ?? NO_GROUP}
+                          onValueChange={(value) => onPatchNode({ parent: value === NO_GROUP ? null : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_GROUP}>（顶层 · 不在任何大框里）</SelectItem>
+                            {groupOptions.map((option) => (
+                              <SelectItem key={option.id} value={option.id}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+
+                      {/* 条件 / 可选：画布上用虚线框表达（对应流程图的「这一步只在某些配置下才存在」） */}
+                      <div className="flex h-8 items-center justify-between rounded-md border border-black/10 bg-black/[0.03] px-2.5">
+                        <span
+                          className="text-micro text-muted-foreground"
+                          title="虚线框：这一步只在某些配置下才存在（例如「仅 lagrangian 源模型」）"
+                        >
+                          条件 / 可选（虚线框）
+                        </span>
+                        <Switch
+                          checked={Boolean(node.conditional)}
+                          onCheckedChange={(value) => onPatchNode({ conditional: value })}
+                        />
+                      </div>
+                    </>
+                  ) : null}
 
                   {/* 收起关系：连线一多就先把它们收起来，只看节点本身。
                       纯视图动作——不删关系、不改数据、不动坐标；状态记在本机浏览器里，刷新后保持。
@@ -721,14 +792,28 @@ export function Inspector({
                     </div>
                   ) : null}
 
+                  {/*
+                    摘要：**有公式的对象**（物理链上可求值的量，生成物逐字带着真源那份 LaTeX）
+                    在这里读到排过版的公式，不再给输入框；其余对象在可编页面上走原来的通用形态，
+                    只读页面（`nodeEditable === false`）则把这一段**印出来**。判据都是数据
+                    （有没有 `formula`、这一页能不能编），不按节点种类另写名单。
+                  */}
                   <Field label="摘要">
-                    <Textarea
-                      value={summary}
-                      onChange={(event) => setSummary(event.target.value)}
-                      onBlur={commitSummary}
-                      placeholder="一句话说明"
-                      className="min-h-[56px]"
-                    />
+                    {node.formula ? (
+                      <Formula latex={node.formula} />
+                    ) : nodeEditable ? (
+                      <Textarea
+                        value={summary}
+                        onChange={(event) => setSummary(event.target.value)}
+                        onBlur={commitSummary}
+                        placeholder="一句话说明"
+                        className="min-h-[56px]"
+                      />
+                    ) : (
+                      /* 只读那一支：这一段是生成物里印出来的话（真源逐字）。给它一个输入框，
+                         只会让人以为"能在这一页改它"——就是给一个改不动的控件。 */
+                      <p className="text-micro leading-relaxed text-foreground/85">{summary}</p>
+                    )}
                   </Field>
 
                   {/* 块属性页（成员明细）：物理在前，所以紧跟摘要 */}
@@ -743,9 +828,9 @@ export function Inspector({
 
                   <Separator />
 
-                  {/* 全局标签：**唯一**一处区块（标题行右侧就是编辑入口，标题由区块自带）。
-                      显示的是"这个节点此刻的标签"——有子图的是子树叶子并集（由 tagEdit 算好递进去）。
-                      容器不参与标签，整块跳过。 */}
+                  {/* 参数：**唯一**一处区块（标题行右侧就是编辑入口，标题由区块自带）。
+                      显示的是"这个节点此刻的参数"——有子图的是子树叶子并集（由 tagEdit 算好递进去）。
+                      容器不参与参数，整块跳过。 */}
                   {(node.type !== 'group' || node.tags.length > 0) ? (
                     <section className="flex flex-col gap-2">
                       <NodeTagSection
@@ -813,8 +898,9 @@ export function Inspector({
                     </>
                   ) : null}
 
-                  {/* 大框是容器，不参与关系：不给「拉出关系」入口 */}
-                  {node.type !== 'group' ? (
+                  {/* 大框是容器，不参与关系：不给「拉出关系」入口。只读页面同样不给——
+                      那一页的 onConnectFrom 接的是只读提示，按钮按下去只会弹一句"只能读"。 */}
+                  {nodeEditable && node.type !== 'group' ? (
                     <Button variant="secondary" onClick={() => onConnectFrom(node.id)}>
                       <Link2 className="h-3.5 w-3.5" />
                       从此节点拉出关系
@@ -823,13 +909,18 @@ export function Inspector({
                 </div>
               </ScrollArea>
 
-              <Separator />
-              <div className="shrink-0 p-3">
-                <Button variant="danger-ghost" className="w-full" onClick={onRemoveNode}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                  删除节点（连带其关系）
-                </Button>
-              </div>
+              {/* 删除节点是动手入口：只读页面（`nodeEditable === false`）整条不出现 */}
+              {nodeEditable ? (
+                <>
+                  <Separator />
+                  <div className="shrink-0 p-3">
+                    <Button variant="danger-ghost" className="w-full" onClick={onRemoveNode}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      删除节点（连带其关系）
+                    </Button>
+                  </div>
+                </>
+              ) : null}
             </>
           ) : edge ? (
             <>

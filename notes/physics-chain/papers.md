@@ -29,7 +29,7 @@
 | **Case B 复合系数** | `thermochem.c:78`（`thermochem.h:16`） | "the case B hydrogen recombination coefficient (Spitzer 1978) in cm^3 s^-1" | ✗ |
 | 电离反馈 | `thermochem.c:21` | "For reionization_feedback, reference Sobacchi & Mesinger 2013" | ✗ |
 | 演化电离盒方程 | `thermochem.c:44` | "evolving ionized box eq. 6 of McQuinn 2015" | ✗ |
-| UV 光度函数（Schechter 形式） | `src/py21cmfast/src/LuminosityFunction.c:2` | "G. Sun and S. R. Furlanetto (2016) MNRAS, 417, 33" | ✗ |
+| UV 光度函数（论文的 Schechter 形式；代码改用晕质量函数换元，分野记在真源 `theory`） | `src/py21cmfast/src/LuminosityFunction.c:2` | "G. Sun and S. R. Furlanetto (2016) MNRAS, 417, 33" | ✗ |
 | 电离区平均自由程 `R_max` | `src/py21cmfast/src/IonisationBox.c:182` | "Yuxiang's evolving Rmax for MFP in ionised regions **fit from Songaila+2010**" | ✗ |
 | 绝热指数修正 | `IonisationBox.c:204` | "from 2302.08506 to fix adiabatic…"（arXiv 号，代码未给作者） | ✗ |
 | **FDM 质量函数压制** | `src/py21cmfast/src/fdm.c:10, 51`（`fdm.h:7`） | "Schive et al. (2016), PRL 116, 201302" + "Schive et al. (2016), Eq. (7); Liu et al. (2025), Eq. (3)" | ✗ |
@@ -75,3 +75,29 @@
 | Greig+2015；Greig+2018；Park+2018；Qin+2020；Mesinger+2011（MNRAS 411, 955）；Murray+2020；arXiv:2504.17254 | 参数化与模型主文 |
 
 > 说明：本表**只标"本地有没有"**。需要哪几篇的正文（PDF）时，把文件放进仓库根目录或 `docs/notes/` 下即可，清单与图谱都会按文件名对上。
+
+## 四、等式对照：推导里的式子 ↔ 现在的块
+
+表由真源 `docs/notes/physics-chain/chain.json` 的 `eq` 字段逐字汇总（每个量挂一条，`eq` 的真源见该文件的 `note` 与 `sources`：编号按 `21cm_physics_derivation.pdf` 的式子，并对照 `Pritchard & Loeb 2012 Review.pdf` 的节号）。因此「哪条式子落在哪个块」由数据唯一决定，不是另行归类：**块认哪些式子 = 它全部成员的 `eq` 的并集**；块名与成员清单见 `README.md` §七。
+
+| 式子（`eq` 逐字） | 认它的量 | 块 |
+| --- | --- | --- |
+| Eq.1 | `dn/dM(M,z)`、`ρ̇*(z)`、`标度关系(M_h)`、`源项的实现`（后两条是 Eq.1 / Eq.4 的实现） | 晕目录与质量函数、晕到星系属性、网格化源项 |
+| Eq.2 | `M_min(z)` | 晕目录与质量函数 |
+| Eq.3 | `Q_HII(z) = 1 − x_HI(z)` | 电离场 |
+| Eq.4 | `Ṅ_ion(z)` | 网格化源项 |
+| Eq.5 | `T_S(z)`、`T_γ`（`T_γ` 是 Eq.5 中的外源） | 气体热与自旋温度、常数与网格 |
+| Eq.6 | `T_K(z)` | 气体热与自旋温度 |
+| Eq.7 | `ε_heat(z)` | 气体热与自旋温度 |
+| Eq.8 | `x_α` | 气体热与自旋温度 |
+| Eq.9 | `δT_b(z)` | 亮温与观测 |
+| Eq.10–Eq.11 | `P_21(k,z)` | 亮温与观测 |
+| Eq.12–Eq.14 | `φ(M_1500, z)` | 晕到星系属性 |
+| Eq.15–Eq.17 | `τ_e` | 亮温与观测 |
+| §0 输入参数定义 | `f*`、`ζ`、`T_vir^min`、`L_X`、`k` | 晕到星系属性、网格化源项、晕目录与质量函数、亮温与观测 |
+| §4.3（依赖 Eq.1） | `J_α(z)` | 气体热与自旋温度 |
+| §IV（与 Eq.5 配套） | `x_c` | 气体热与自旋温度 |
+
+- **真源没给式子的量就空着**：`matter_power`、`transfer_fn`、`vcb`、`initial_density`、`perturb_field`、`filtered_xray`、`gamma_12`、`recomb`、`mfp`、`z_reion` 这一类是代码里的量（推导缩编里没有编号式子），MUST NOT 替它们编一个。
+- **式子 ≠ 代码算法**：`Q_HII / x_HI` 与 `T_S` 两处的理论式与代码实际执行的算法不是同一套（见 `README.md` §一），这里的 `eq` 记的是**理论式**；代码怎么算写在成员文档的「算法」一节。
+- **块内关系不带式子**：`eq` 只挂在量上；「谁依赖谁」由依赖边表达，边的出处是源码（`codeRef`），不是式子号。

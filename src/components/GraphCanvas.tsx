@@ -18,14 +18,13 @@ import { ContextMenu, type ContextMenuState } from './ContextMenu'
 import { cn } from '../lib/utils'
 import {
   ARROW_PORTS,
-  NODE_TYPE_ORDER,
   type ArrowPort,
   type GraphRef,
   type NodePosition,
   type NodeType,
 } from '../lib/types'
 import type { TopicVisibility } from '../lib/topics'
-import { SNAP_COLOR, TAG_DOT_COLOR, TAG_DOT_INSET, TAG_DOT_SIZE } from '../graph/palette'
+import { SNAP_COLOR, TAG_DOT_COLOR, TAG_DOT_INSET, TAG_DOT_SIZE, type EdgeStyleId } from '../graph/palette'
 
 /**
  * 「有子图的模块」上粒子的落点：写死的 5 个位置 + 错开的延迟。
@@ -140,6 +139,22 @@ export interface GraphCanvasProps {
    * 把"画不画"推给渲染器（切类名，不重建元素），把控件画在右上角那一列。
    */
   crossRedshiftFeedback?: CrossRedshiftFeedbackState
+  /**
+   * 图例里线型条目的**本页叫法**（可选，缺省用 `palette.ts` 那张表的通用名）。
+   *
+   * 存在的理由只有一处：物理链页的「主序」在本页是"同一红移内的数据流"，与它旁边那条
+   * 「跨红移回流」相对照才读得通（`graphify-physics-chain` 的图例要求）。
+   * 不传就照通用名——画布页走的正是这条路。
+   */
+  legendEdgeLabels?: Partial<Record<EdgeStyleId, string>>
+  /**
+   * 图例里**不列**的要素种类（可选，缺省一个都不隐）：给"本页的装饰框不是要素种类"用。
+   *
+   * 存在的理由只有一处：物理链页一级的段容器是装饰（`graphify-physics-chain` 的「段容器不参与图例与标签」），
+   * 而画布页的层带按 `graphify-canvas-appearance` 要列进要素种类——两页口径不同，只能按页给。
+   * 不传就照单全收——画布页走的正是这条路。
+   */
+  legendHiddenTypes?: NodeType[]
   /** 可见集指纹：只有它变化时才重新套用过滤并取景，普通编辑不会让画布跳动 */
   topicKey: string
   /** 每个标签页一份 CanvasApi：激活 / 卸载时登记与注销 */
@@ -226,6 +241,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   /** 常显边标签：产物名只写在边标签上，需要整读数据流时打开 */
   const [showEdgeLabels, setShowEdgeLabels] = useState(false)
+  /**
+   * 图例：**默认收起**，展开态留在这里而不是图例组件自己——点画布空白要同时收起图例与清点亮，
+   * 两条手势收在同一次回调里（见下面的 `onClearSelection`），放在子组件里就得跨组件通信。
+   */
+  const [legendOpen, setLegendOpen] = useState(false)
+  /** 图例里线型那一段的条目：渲染器按此刻可见的边派生（藏起来的回流不该占一条） */
+  const [legendEdgeStyles, setLegendEdgeStyles] = useState<EdgeStyleId[]>([])
+  /** 图例里要素那一段的条目：同一口径，按此刻可见的**节点**派生（收着的话题不该占一条） */
+  const [legendNodeTypes, setLegendNodeTypes] = useState<NodeType[]>([])
 
   const connectSource = props.connectSource
   /** 由渲染器挂载处赋值的刷新入口，供浮层自身的指针事件即时重算 */
@@ -263,7 +287,10 @@ export function GraphCanvas(props: GraphCanvasProps) {
         },
         onClearSelection: () => {
           if (propsRef.current.connectSource) propsRef.current.onConnectCancel()
-          select(null, null)
+          // 点空白 = 回到「什么都没点亮」：清选中**并**熄灭本页点亮标记（两页各清各的，见 GraphSource.clearHighlight）
+          sourceRef.current.clearHighlight()
+          // 展开着的图例跟着收起：点空白就是「把浮层都收掉」，与上面同一条手势
+          setLegendOpen(false)
           setMenu(null)
         },
         onEnterSubgraph: (id) => propsRef.current.onEnterSubgraph(id),
@@ -318,6 +345,11 @@ export function GraphCanvas(props: GraphCanvasProps) {
           renderer.fit()
         },
         onVisibilityChange: (info) => {
+          /**
+           * 可见集变了，画布浮层要立刻跟上：红点徽标 / 可进入模块的光晕 / 图例都是按
+           * "此刻真画出来的"算的，而这条路径（切话题、收起关系）不经过 store 那次刷新。
+           */
+          refreshRef.current()
           if (propsRef.current.active) propsRef.current.onVisibilityChange?.(info)
         },
       },
@@ -385,6 +417,26 @@ export function GraphCanvas(props: GraphCanvasProps) {
       const subKey = (list: typeof subMarks) =>
         list.map((mark) => `${mark.nodeId}:${Math.round(mark.x)},${Math.round(mark.y)},${Math.round(mark.w)}`).join('|')
       setSubgraphMarks((previous) => (subKey(previous) === subKey(subMarks) ? previous : subMarks))
+      /**
+       * 图例的线型条目：渲染器报出此刻**真画出来**的那几档（与上面两套 marks 同一刷新时机，
+       * 于是开关开合、切标签页、收起某模块的关系都会跟着变）。内容不变就不换引用。
+       */
+      const edgeStyles = allowed ? current.presentEdgeStyles() : []
+      setLegendEdgeStyles((previous) =>
+        previous.length === edgeStyles.length && previous.every((id, index) => id === edgeStyles[index])
+          ? previous
+          : edgeStyles,
+      )
+      /**
+       * 图例的要素条目：同一刷新时机、同一口径——渲染器报出此刻**真画出来**的种类。
+       * 于是切话题、切标签页、收起分支都会跟着变，图例不会列一个画布上找不到的种类。
+       */
+      const nodeTypes = allowed ? current.presentNodeTypes() : []
+      setLegendNodeTypes((previous) =>
+        previous.length === nodeTypes.length && previous.every((type, index) => type === nodeTypes[index])
+          ? previous
+          : nodeTypes,
+      )
       // 呼吸：这些模块自己的尺寸周期性地膨胀收缩（没有这类模块时渲染器会立刻停掉动画循环）
       current.breatheNodes(subMarks.map((mark) => mark.nodeId))
     }
@@ -496,11 +548,20 @@ export function GraphCanvas(props: GraphCanvasProps) {
     refreshRef.current()
   }, [activeTagIds, graph])
 
-  /** 图例只列当前图谱出现的要素种类 */
-  const usedTypes = useMemo<NodeType[]>(
-    () => NODE_TYPE_ORDER.filter((type) => graph.nodes.some((node) => node.type === type)),
-    [graph.nodes],
-  )
+  /**
+   * 图例的要素条目：渲染器报出**此刻真画出来**的种类（收着的话题、别的标签页、收起的分支都不算），
+   * 本页声明不当要素种类的那些再排掉（`legendHiddenTypes`，如物理链页把段容器排掉）。
+   */
+  const legendHiddenTypes = props.legendHiddenTypes
+  const usedTypes = useMemo<NodeType[]>(() => {
+    const hidden = new Set(legendHiddenTypes ?? [])
+    return legendNodeTypes.filter((type) => !hidden.has(type))
+  }, [legendNodeTypes, legendHiddenTypes])
+
+  /** 切到别的标签页就收起图例：展开态是「这一屏现在在看什么」，不该跟着标签页搬过去 */
+  useEffect(() => {
+    if (!props.active) setLegendOpen(false)
+  }, [props.active])
 
   /* ---------------- 布局算法：切换后立刻重排一次 ---------------- */
   useEffect(() => {
@@ -875,8 +936,23 @@ export function GraphCanvas(props: GraphCanvasProps) {
             onToggleEdgeLabels={() => setShowEdgeLabels((prev) => !prev)}
           />
           <CrossRedshiftFeedbackToggle state={props.crossRedshiftFeedback} />
-          <GraphLegend compact types={usedTypes} />
         </div>
+      </div>
+
+      {/*
+        图例：**贴画布左下角**、默认收起成一枚入口，点开在它上方铺开。
+        为什么不再放右上角那一列：那列已经叠着缩放条与跨红移开关，图例再挤进去就是三层，
+        节点种类一多还会换行成大块压住画布（见 GraphLegend 的说明）。
+        展开态由本组件持有：点空白收起与「点空白回到什么都没点亮」共用同一次回调。
+      */}
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+        <GraphLegend
+          types={usedTypes}
+          edgeStyles={legendEdgeStyles}
+          labels={props.legendEdgeLabels}
+          open={legendOpen}
+          onToggle={() => setLegendOpen((prev) => !prev)}
+        />
       </div>
 
       <ContextMenu

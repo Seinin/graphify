@@ -119,7 +119,7 @@ export function MdLibraryPanel({
           <button
             type="button"
             onClick={() => setExpanded((prev) => ({ ...prev, [doc.docId]: !isExpanded }))}
-            className="mt-[3px] shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-transform duration-200 hover:text-foreground"
+            className="mt-[1px] shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-transform duration-200 hover:text-foreground"
             aria-label={isExpanded ? '收起大纲' : '展开大纲'}
           >
             <ChevronRight className={cn('h-3 w-3 transition-transform duration-200', isExpanded && 'rotate-90')} />
@@ -135,9 +135,6 @@ export function MdLibraryPanel({
               <FileText className="h-3 w-3 shrink-0 text-cyan-700/80" />
               <span className="truncate text-tiny font-medium text-foreground/92">{doc.title}</span>
               {refCount > 0 ? <Badge tone="primary">{refCount}</Badge> : null}
-            </span>
-            <span className="mt-0.5 block truncate font-mono text-micro text-muted-foreground/70">
-              {doc.fileName}
             </span>
           </button>
 

@@ -23,16 +23,21 @@
       "rangeText": "(0.1, 1.0)",
       "range": [
         0.1,
-        1.0
+        1
       ],
       "page": 1,
       "eq": "§0 输入参数定义",
       "codeNames": [
         "ALPHA_STAR",
-        "F_STAR10"
+        "F_STAR10",
+        "SIGMA_STAR",
+        "UPPER_STELLAR_TURNOVER_MASS",
+        "UPPER_STELLAR_TURNOVER_INDEX",
+        "M_TURN"
       ],
       "reviewSection": "§3.6 天体物理源与历史",
-      "note": "推导写作 ALPHA_STAR；仓库当前跟踪的是新参数化 F_STAR10（log10 存储、默认 -1.3、范围 [-3,0]）。两者是同一物理量的新旧参数化，不可混写。"
+      "note": "推导写作 ALPHA_STAR；仓库当前跟踪的是新参数化 F_STAR10（log10 存储、默认 -1.3、范围 [-3,0]）。两者是同一物理量的新旧参数化，不可混写。",
+      "theory": "理论出处：推导 PDF · Eq.1（f* 的幂律与低质端指数截断）。**代码的取值比式子里多三项**：高质端在转折质量以上换另一个指数（双幂律，默认参数下就生效）、每个晕按对数正态散射抽一次（宽度 σ_⋆；默认口径给的是条件分布的均值，故减 σ_⋆²/2 使散射项的期望为 1；HALO_SCALING_RELATIONS_MEDIAN 打开则改为给中值、去掉这一项）、并硬截断在一以内。这属于「同一套算法的细化版」而非两码事，所以摘要给代码的完整表达式；PDF 的简式是它的特例（高质端不换幂律、去掉散射项）。"
     },
     {
       "id": "zeta",
@@ -57,7 +62,7 @@
       "name": "能形成恒星的最小晕维里温度",
       "rangeText": "(4.0, 5.5)（log10）",
       "range": [
-        4.0,
+        4,
         5.5
       ],
       "page": 1,
@@ -84,23 +89,6 @@
       ],
       "reviewSection": "§3.4 加热与电离",
       "note": "代码里存在 L_X，但**不在**仓库跟踪的 15 个参数里。"
-    },
-    {
-      "id": "k_target",
-      "symbol": "k",
-      "name": "功率谱目标波数",
-      "rangeText": "(0.05, 1.0) Mpc^-1",
-      "range": [
-        0.05,
-        1.0
-      ],
-      "page": 1,
-      "eq": "§0 输入参数定义",
-      "codeNames": [
-        "K_TARGET"
-      ],
-      "reviewSection": "§4.5 全功率谱的演化",
-      "note": "**不是模型参数**：inputs.py 里没有 K_TARGET，它是观测/分析侧选定的采样波数。图谱里作为「看哪一段」的入口，不作为驱动参数参与推导。"
     }
   ],
   "nodes": [
@@ -128,7 +116,21 @@
       "codeHints": [
         "S08"
       ],
-      "reviewSection": "§3.6"
+      "reviewSection": "§3.6",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/hmf.c",
+          "symbol": "minimum_source_mass",
+          "line": 1262,
+          "endLine": 1288,
+          "needles": [
+            "Mmin",
+            "mu_factor",
+            "t_vir_min",
+            "TtoM"
+          ]
+        }
+      ]
     },
     {
       "id": "dn_dm",
@@ -154,16 +156,37 @@
         "S08"
       ],
       "reviewSection": "§3.6",
-      "surfaceNote": "它是 Eq.1 积分里本来就有的符号（∫ dn/dM · dM/dt dM）——补一个节点解释它，不是新增物理。它**怎么被算出来**（传输函数、方差、质量函数公式）进子图。"
+      "surfaceNote": "它是 Eq.1 积分里本来就有的符号（∫ dn/dM · dM/dt dM）——补一个节点解释它，不是新增物理。它**怎么被算出来**（传输函数、方差、质量函数公式）进子图。",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/hmf.c",
+          "symbol": "dNdlnM_st",
+          "line": 269,
+          "endLine": 281,
+          "needles": [
+            "dNdlnM_st",
+            "EvaluateSigma",
+            "dsigmadm"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/LuminosityFunction.c",
+          "symbol": "ComputeLF",
+          "line": 259,
+          "endLine": 262,
+          "needles": [
+            "dndm",
+            "unconditional_hmf",
+            "log10phi"
+          ]
+        }
+      ]
     },
     {
       "id": "hmf_impl",
       "symbol": "质量函数的算法",
-      "name": "把 dn/dM 算出来（子图）",
+      "name": "把 dn/dM 算出来",
       "kind": "engineering",
-      "layer": "subgraph",
-      "parent": "dn_dm",
-      "parentNote": "父节点是 Eq.1 里的 dn/dM；这一项是它的代码实现（怎么算），不进表面。",
       "eq": "Eq.1 的实现",
       "formula": "",
       "dependsOn": [],
@@ -188,7 +211,20 @@
           "desc": "质量函数用哪个公式：PS / ST / WATSON / WATSON-Z / DELOS"
         }
       ],
-      "reviewSection": ""
+      "reviewSection": "",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/hmf.c",
+          "symbol": "unconditional_hmf",
+          "line": 502,
+          "endLine": 524,
+          "needles": [
+            "unconditional_hmf",
+            "dNdlnM_st",
+            "dNdlnM_PS"
+          ]
+        }
+      ]
     },
     {
       "id": "scaling_relations",
@@ -213,16 +249,26 @@
         "S12.1"
       ],
       "reviewSection": "",
-      "implementedAs": "晕属性 → 星系属性的换算核（atlas L4 · S12.1.1 set_scaling_constants：「标度关系是全部天体物理参数的落点」）：由 f* 的幅度与斜率给出每个晕的恒星质量份额、恒星形成率、逃逸分数、金属性与 X 射线亮度。质量下限由 S12.1.2 lyman_werner_threshold 按 LW 强度与再电离反馈给出（即 M_min 那一支）。"
+      "implementedAs": "晕属性 → 星系属性的换算核（atlas L4 · S12.1.1 set_scaling_constants：「标度关系是全部天体物理参数的落点」）：由 f* 的幅度与斜率给出每个晕的恒星质量份额、恒星形成率、逃逸分数、金属性与 X 射线亮度。质量下限由 S12.1.2 lyman_werner_threshold 按 LW 强度与再电离反馈给出（即 M_min 那一支）。",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/scaling_relations.c",
+          "symbol": "get_halo_stellarmass",
+          "line": 336,
+          "endLine": 360,
+          "needles": [
+            "scaling_double_PL",
+            "scaling_single_PL",
+            "star_acg"
+          ]
+        }
+      ]
     },
     {
       "id": "source_grid",
       "symbol": "源项的实现",
-      "name": "把源项的积分算出来（子图）",
+      "name": "把源项的积分算出来",
       "kind": "engineering",
-      "layer": "subgraph",
-      "parent": "rho_star",
-      "parentNote": "父节点是 Eq.1 那个积分式（ρ̇*）：这一项是它的**代码实现（怎么算）**，不是新的物理（算什么）。按规则它不进表面。",
       "eq": "Eq.1 / Eq.4 的实现",
       "formula": "",
       "dependsOn": [
@@ -251,7 +297,32 @@
         }
       ],
       "reviewSection": "",
-      "implementedAs": "ComputeHaloBox（atlas L4 · S12.2.1：「两条源模型路径在这里分界」）：先清零源项网格，再按 SOURCE_MODEL 走「离散晕累加」（sum_halos_onto_grid）或「条件积分表」（set_fixed_grids，取盒均值 mean_fix_grids），产出 halo_sfr / nion / halo_xray / whalo_sfr 四张网格。**这是公式流里 ρ̇* 的 3D 非均匀版本**——不是同一个标量的另一种算法，而是同一个物理的两种表示。"
+      "implementedAs": "ComputeHaloBox（atlas L4 · S12.2.1：「两条源模型路径在这里分界」）：先清零源项网格，再按 SOURCE_MODEL 走「离散晕累加」（sum_halos_onto_grid）或「条件积分表」（set_fixed_grids，取盒均值 mean_fix_grids），产出 halo_sfr / nion / halo_xray / whalo_sfr 四张网格。**这是公式流里 ρ̇* 的 3D 非均匀版本**——不是同一个标量的另一种算法，而是同一个物理的两种表示。",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/map_mass.c",
+          "symbol": "move_grid_galprops",
+          "line": 300,
+          "endLine": 334,
+          "needles": [
+            "get_cell_integrals",
+            "do_cic_interpolation",
+            "boxes->halo_sfr",
+            "boxes->n_ion"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/map_mass.c",
+          "symbol": "move_halo_galprops",
+          "line": 421,
+          "endLine": 433,
+          "needles": [
+            "set_halo_properties",
+            "do_cic_interpolation",
+            "boxes->halo_sfr"
+          ]
+        }
+      ]
     },
     {
       "id": "rho_star",
@@ -279,7 +350,31 @@
       "codeHints": [
         "S12"
       ],
-      "reviewSection": "§3.6"
+      "reviewSection": "§3.6",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/HaloBox.c",
+          "symbol": "get_uhmf_averages",
+          "line": 118,
+          "endLine": 150,
+          "needles": [
+            "prefactor_sfr",
+            "intgrl_stars_only",
+            "halo_sfr"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/interp_tables.c",
+          "symbol": "EvaluateSFRD",
+          "line": 941,
+          "endLine": 951,
+          "needles": [
+            "sc_sfrd",
+            "Nion_General",
+            "Fcoll_General"
+          ]
+        }
+      ]
     },
     {
       "id": "nion",
@@ -310,7 +405,31 @@
       "codeHints": [
         "S12"
       ],
-      "reviewSection": "§3.3"
+      "reviewSection": "§3.3",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/HaloBox.c",
+          "symbol": "get_uhmf_averages",
+          "line": 153,
+          "endLine": 154,
+          "needles": [
+            "n_ion",
+            "intgrl_fesc_weighted",
+            "prefactor_nion"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/HaloBox.c",
+          "symbol": "set_halo_properties",
+          "line": 259,
+          "endLine": 263,
+          "needles": [
+            "n_ion",
+            "EvaluateNion_Conditional",
+            "M_min"
+          ]
+        }
+      ]
     },
     {
       "id": "q_hii",
@@ -338,7 +457,31 @@
       "codeHints": [
         "S13"
       ],
-      "reviewSection": "§3.3"
+      "reviewSection": "§3.3",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1180,
+          "endLine": 1188,
+          "needles": [
+            "box->neutral_fraction",
+            "res_xH",
+            "xHII_from_xrays"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "ComputeIonizedBox",
+          "line": 1586,
+          "endLine": 1595,
+          "needles": [
+            "global_xH",
+            "box->neutral_fraction",
+            "HII_TOT_NUM_PIXELS"
+          ]
+        }
+      ]
     },
     {
       "id": "eps_heat",
@@ -364,9 +507,24 @@
         "X 总结性数学性质表"
       ],
       "codeHints": [
-        "S14.3"
+        "S14.3",
+        "S14.1",
+        "S14.4"
       ],
-      "reviewSection": "§3.4 加热与电离"
+      "reviewSection": "§3.4 加热与电离",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "ts_main",
+          "line": 1703,
+          "endLine": 1707,
+          "needles": [
+            "dxheat_dt_box",
+            "freq_int_heat_tbl",
+            "xray_sfr"
+          ]
+        }
+      ]
     },
     {
       "id": "tk",
@@ -394,7 +552,20 @@
       "codeHints": [
         "S14.7"
       ],
-      "reviewSection": "§3.4"
+      "reviewSection": "§3.4",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1293,
+          "endLine": 1311,
+          "needles": [
+            "Tk",
+            "dxheat_dzp",
+            "output.Tk"
+          ]
+        }
+      ]
     },
     {
       "id": "jalpha",
@@ -420,7 +591,20 @@
       "codeHints": [
         "S14.2"
       ],
-      "reviewSection": "§2.3 Wouthuysen–Field 效应"
+      "reviewSection": "§2.3 Wouthuysen–Field 效应",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1314,
+          "endLine": 1335,
+          "needles": [
+            "J_alpha_tot",
+            "dstarlya_dt",
+            "dxlya_dt"
+          ]
+        }
+      ]
     },
     {
       "id": "xalpha",
@@ -448,7 +632,20 @@
       "codeHints": [
         "S14.2"
       ],
-      "reviewSection": "§2.3"
+      "reviewSection": "§2.3",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1332,
+          "endLine": 1346,
+          "needles": [
+            "xa_tilde_fast",
+            "xa_tilde_prefactor",
+            "J_alpha_tot"
+          ]
+        }
+      ]
     },
     {
       "id": "tgamma",
@@ -470,7 +667,29 @@
         "IV 自旋温度"
       ],
       "codeHints": [],
-      "reviewSection": "§3.2 全局信号的演化"
+      "reviewSection": "§3.2 全局信号的演化",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/Constants.c",
+          "symbol": "physconst",
+          "line": 25,
+          "endLine": 26,
+          "needles": [
+            "T_cmb",
+            "2.7255"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "set_zp_consts",
+          "line": 1126,
+          "endLine": 1127,
+          "needles": [
+            "Trad",
+            "T_cmb"
+          ]
+        }
+      ]
     },
     {
       "id": "ts",
@@ -502,7 +721,20 @@
       "codeHints": [
         "S14.6"
       ],
-      "reviewSection": "§2.2 碰撞耦合、§3.5 耦合"
+      "reviewSection": "§2.2 碰撞耦合、§3.5 耦合",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1348,
+          "endLine": 1356,
+          "needles": [
+            "TS_fast",
+            "xCMB",
+            "xc_fast"
+          ]
+        }
+      ]
     },
     {
       "id": "xc",
@@ -529,7 +761,20 @@
       "codeHints": [
         "S14.6"
       ],
-      "reviewSection": "§2.2 碰撞耦合"
+      "reviewSection": "§2.2 碰撞耦合",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1326,
+          "endLine": 1328,
+          "needles": [
+            "xc_fast",
+            "xc_inverse",
+            "kappa_10"
+          ]
+        }
+      ]
     },
     {
       "id": "dtb",
@@ -560,7 +805,20 @@
       "codeHints": [
         "S15.1"
       ],
-      "reviewSection": "§3 全局 21cm 信号"
+      "reviewSection": "§3 全局 21cm 信号",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/BrightnessTemperatureBox.c",
+          "symbol": "ComputeBrightnessTemp",
+          "line": 72,
+          "endLine": 86,
+          "needles": [
+            "box->brightness_temp",
+            "pixel_x_HI",
+            "spin_temp->spin_temperature"
+          ]
+        }
+      ]
     },
     {
       "id": "p21",
@@ -591,29 +849,43 @@
       "codeHints": [
         "S15"
       ],
-      "reviewSection": "§4 涨落与功率谱（§4.1 红移空间畸变、§4.2 电离涨落）"
+      "reviewSection": "§4 涨落与功率谱（§4.1 红移空间畸变、§4.2 电离涨落）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/cli.py",
+          "symbol": "pr_feature",
+          "line": 718,
+          "endLine": 734,
+          "needles": [
+            "powerbox.get_power",
+            "brightness_temp",
+            "bins_upto_boxlen"
+          ]
+        }
+      ]
     },
     {
       "id": "phi_uv",
       "symbol": "φ(M_1500, z)",
-      "name": "UV 光度函数（Schechter）",
+      "name": "UV 光度函数",
       "kind": "function",
       "observable": true,
       "page": 7,
       "eq": "Eq.12–Eq.14",
-      "formula": "φ(M_1500,z) = (ln10/2.5) · φ*(z) · 10^{0.4(α+1)(M*−M_1500)} · exp(−10^{0.4(M*−M_1500)})；φ*(z), M*(z), α(z) ← ρ̇*(z) = f* · f_coll(M_min(T_vir^min), z) · ρ̄_b；L_1500 = κ_UV Ṁ*(M_halo)，M_1500 = −2.5 log10(L_1500/L_28)",
+      "formula": "φ(M_1500,z) = |dM_1500/dM_h|^{−1} · (dn/dM_h) · exp(−M_turn/M_h) · f_duty；M_1500 = 51.63 − 2.5 log10(SFR · L_UV/SFR)，SFR = M_h · (Ω_b/Ω_m) · f* · H(z)/t*",
       "dependsOn": [
         "fstar",
         "mmin",
         "rho_star"
       ],
       "nature": {
-        "type": "Schechter 解析式（指数 × 幂律）",
+        "type": "质量函数换元（晕质量函数 ÷ |dM_1500/dM_h| × 转折质量抑制 × 占空比）；论文是 Schechter 解析式",
         "homogeneity": "高度非线性（截断处极灵敏）",
         "coupling": "与 x_HI、f*、ζ **无直接代数关联** ⇒ 关键作用是**打破 ζ·f* 简并**",
         "nonlocal": "否",
         "degenerate": "否（它是解简并的工具）"
       },
+      "theory": "理论出处：推导 PDF · Eq.12–Eq.14（Schechter 形式：φ*、M*、α 由 ρ̇*(z) 按经验关系定出）。**代码不做这个拟合式**——代码把晕质量函数换元到绝对星等轴（算式见 algorithms.byId.phi_uv 与工程落点），式中的 φ*、M*、α 在代码里没有对应物。按「两码事时图上以代码为准、理论在文档里给」的口径，摘要给代码表达式（docText.phi_uv.formula），论文式子记在这里。",
       "sections": [
         "VI UV 光度函数",
         "X 总结性数学性质表"
@@ -621,7 +893,31 @@
       "codeHints": [
         "S04.1"
       ],
-      "reviewSection": "§3.6"
+      "reviewSection": "§3.6",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/LuminosityFunction.c",
+          "symbol": "ComputeLF",
+          "line": 186,
+          "endLine": 199,
+          "needles": [
+            "Muv_1",
+            "dMuvdMhalo",
+            "log10phi"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/LuminosityFunction.c",
+          "symbol": "ComputeLF",
+          "line": 253,
+          "endLine": 262,
+          "needles": [
+            "dndm",
+            "deriv",
+            "log10phi"
+          ]
+        }
+      ]
     },
     {
       "id": "tau_e",
@@ -650,7 +946,31 @@
       "codeHints": [
         "S04.2"
       ],
-      "reviewSection": "§3.2 全局信号的演化"
+      "reviewSection": "§3.2 全局信号的演化",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/thermochem.c",
+          "symbol": "dtau_e_dz",
+          "line": 161,
+          "endLine": 191,
+          "needles": [
+            "dtau_e_dz",
+            "xi",
+            "drdz"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/thermochem.c",
+          "symbol": "tau_e",
+          "line": 269,
+          "endLine": 272,
+          "needles": [
+            "sigma_T",
+            "prehelium",
+            "posthelium"
+          ]
+        }
+      ]
     },
     {
       "id": "matter_power",
@@ -670,12 +990,37 @@
       },
       "sections": [],
       "codeHints": [
-        "S09.5.1"
+        "S09.5.1",
+        "S04.4"
       ],
       "reviewSection": "",
-      "implementedAs": "cosmology.c 的 init_ps()（:536，由 InitialConditions.c:619 调用）：把宇宙学参数整理成 cosmo_consts，再由 power_in_k() 逐模求值，产出 σ(R)、dσ²/dM 等表，供 hmf.c 与 interp_tables.c 插值。",
+      "implementedAs": "cosmology.c 的 init_ps()（:536，由 InitialConditions.c:619 调用）：把宇宙学参数整理成 cosmo_consts，再由 power_in_k() 逐模求值，产出 σ(R)、dσ²/dM 等表，供 hmf.c 与 interp_tables.c 插值。外部宇宙学码那条路在 Python 侧：wrapper/classy_interface.py 的 compute_rms() 用原初谱幅度 A_s 与转移函数在给定尺度上积分，得到密度场的均方根。",
       "theory": "理论出处：Pritchard & Loeb 2012 把线性功率谱当给定输入（Eq.2 的 P(k)），没单列节点，所以旧方案的 24 个对象里没有它。切块判据 = 「一个块 = 一个盒子」，CosmoTables 必须有成员，否则 M1 是空块。",
-      "codeRef": "cosmology.c:536 init_ps()"
+      "codeRef": "cosmology.c:536 init_ps()",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/cosmology.c",
+          "symbol": "power_in_k",
+          "line": 273,
+          "endLine": 296,
+          "needles": [
+            "power_in_k",
+            "transfer_function",
+            "sigma_norm"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/interp_tables.c",
+          "symbol": "initialiseSigmaMInterpTable",
+          "line": 1172,
+          "endLine": 1181,
+          "needles": [
+            "Sigma_InterpTable",
+            "sigma_z0",
+            "dSigmasqdm_InterpTable"
+          ]
+        }
+      ]
     },
     {
       "id": "vcb",
@@ -702,7 +1047,30 @@
       "reviewSection": "",
       "implementedAs": "InitialConditions.c 的 ComputeInitialConditions（:547-:776）产出的 lowres_vcb 盒；开关 USE_RELATIVE_VELOCITIES，压制尺度由 A_VCB_PM / KP_VCB_PM / SIGMAK_VCB_PM 给。",
       "theory": "旧方案的 24 个对象里没有它，但代码里它有两处硬作用：① HaloCatalog.c 的质量函数按它做小质量端压制；② HaloBox.c:487 的 ini_boxes->lowres_vcb 改写 M_turn（见 feedback 里的 M2→M6）。",
-      "codeRef": "InitialConditions.c:547-:776 ComputeInitialConditions（lowres_vcb）"
+      "codeRef": "InitialConditions.c:547-:776 ComputeInitialConditions（lowres_vcb）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "compute_relative_velocities",
+          "line": 176,
+          "endLine": 190,
+          "needles": [
+            "power_in_vcb",
+            "p_vcb",
+            "c_kms"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "ComputeInitialConditions",
+          "line": 734,
+          "endLine": 736,
+          "needles": [
+            "compute_relative_velocities",
+            "lowres_vcb"
+          ]
+        }
+      ]
     },
     {
       "id": "perturb_field",
@@ -729,11 +1097,24 @@
       "reviewSection": "",
       "implementedAs": "PerturbedField.c 的 ComputePerturbedField(z, InitialConditions *boxes, PerturbedField *perturbed_field)：把高分辨线性场用一阶拉格朗日位移搬到低分辨网格，:455 写进 perturbed_field->density。速度场是同一盒子里的另一个字段（见 v(x)）。它被 TsBox / IonizedBox / BrightnessTemp 都收下。",
       "theory": "旧方案把「引力扰动」并进了别的块，代码里它是一个独立盒子（有独立开关 PERTURB_ALGORITHM / PERTURB_ON_HIGH_RES），下游三个盒子都拿它当参数，所以单列一块。",
-      "codeRef": "PerturbedField.c:382 ComputePerturbedField"
+      "codeRef": "PerturbedField.c:382 ComputePerturbedField",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/PerturbedField.c",
+          "symbol": "ComputePerturbedField",
+          "line": 446,
+          "endLine": 460,
+          "needles": [
+            "perturbed_field->density",
+            "LOWRES_density_perturb",
+            "grid_index_general"
+          ]
+        }
+      ]
     },
     {
       "id": "filtered_xray",
-      "symbol": "X 射线加热率",
+      "symbol": "过滤后的 X 射线源",
       "name": "X 射线源的历史卷积（加热源）",
       "kind": "quantity",
       "page": "",
@@ -756,7 +1137,20 @@
       "reviewSection": "",
       "implementedAs": "SpinTemperatureBox.c:751 的 UpdateXraySourceBox(halobox, R_inner, R_outer, R_ct, ...)：吃整个 [z, zmax] 的 halo 盒数组，按 N_STEP_TS / R_MAX_TS / NU_X_* 做历史卷积，写进 XraySourceBox.filtered_xray。",
       "theory": "这是旧方案里最大的一处漏：XraySourceBox 在代码里是一整个能单独缓存的盒子（注释写着 Purge XraySourceBox because it is enormous，coeval.py 里还要 force purge），而 24 个对象里没有任何对应物。",
-      "codeRef": "SpinTemperatureBox.c:751 UpdateXraySourceBox（XraySourceBox.filtered_xray）"
+      "codeRef": "SpinTemperatureBox.c:751 UpdateXraySourceBox（XraySourceBox.filtered_xray）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "UpdateXraySourceBox",
+          "line": 765,
+          "endLine": 767,
+          "needles": [
+            "filtered_xray",
+            "halo_xray",
+            "one_annular_filter"
+          ]
+        }
+      ]
     },
     {
       "id": "transfer_fn",
@@ -781,7 +1175,20 @@
       "reviewSection": "",
       "implementedAs": "cosmology.c:213 transfer_function(k)：按 matter_options_global->POWER_SPECTRUM 分派到六条实现——transfer_function_EH(:53，默认 Eisenstein & Hu 1998)、transfer_function_BBKS(:76)、transfer_function_Efstathiou(:89)、transfer_function_Peebles(:101)、transfer_function_White(:114)、transfer_function_CLASS(:131，POWER_SPECTRUM=5)。",
       "theory": "P(k) = T²(k)·kⁿ·原初谱里的 T(k)。Pritchard & Loeb 2012 把 P(k) 当给定输入、没单列它；按「一个块 = 一个盒子」切块后，CosmoTables 里 T(k) 与 σ(R) 是两件可分开核的事，所以并列成两个成员。",
-      "codeRef": "cosmology.c:213 transfer_function()（按 POWER_SPECTRUM 分派 EH/BBKS/Efstathiou/Peebles/White/CLASS）"
+      "codeRef": "cosmology.c:213 transfer_function()（按 POWER_SPECTRUM 分派 EH/BBKS/Efstathiou/Peebles/White/CLASS）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/cosmology.c",
+          "symbol": "transfer_function",
+          "line": 213,
+          "endLine": 231,
+          "needles": [
+            "transfer_function",
+            "POWER_SPECTRUM",
+            "transfer_function_EH"
+          ]
+        }
+      ]
     },
     {
       "id": "initial_density",
@@ -806,7 +1213,20 @@
       "reviewSection": "",
       "implementedAs": "InitialConditions.c 的 ComputeInitialConditions：k 空间高斯随机场乘上功率谱、归一化后做逆 DFT 回实空间，:728 写进 boxes->lowres_density[index_r]（除以体元）。一阶与二阶位移场都由它经 k 空间算子算出（:593 / :596）。",
       "theory": "旧方案把初始密度场并进别的环节；代码里它是 InitialConditions 盒的第一个产物，位移场由它导出，所以它是块内的源头。",
-      "codeRef": "InitialConditions.c:728（boxes->lowres_density[index_r] 写入）"
+      "codeRef": "InitialConditions.c:728（boxes->lowres_density[index_r] 写入）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "ComputeInitialConditions",
+          "line": 715,
+          "endLine": 732,
+          "needles": [
+            "lowres_density",
+            "resample_index",
+            "dim_ratio_hi_lo"
+          ]
+        }
+      ]
     },
     {
       "id": "zeldovich_velocity",
@@ -833,7 +1253,31 @@
       "reviewSection": "",
       "implementedAs": "InitialConditions.c:299 compute_velocity_fields()：密度场在 k 空间乘 i·k/k² 得位移场、再按生长因子换算成速度，写进 boxes->lowres_vx / vy / vz（低分辨路线的指针在 :593 绑定，高分辨路线见 :586）。",
       "theory": "Zel'dovich 一阶拉格朗日微扰：位移场 = 密度场的 k 空间梯度。Pritchard & Loeb 2012 没单列，代码里它是 InitialConditions 盒的独立字段。",
-      "codeRef": "InitialConditions.c:299 compute_velocity_fields()（:593 vel_pointers 绑定 boxes->lowres_vx）"
+      "codeRef": "InitialConditions.c:299 compute_velocity_fields()（:593 vel_pointers 绑定 boxes->lowres_vx）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "compute_velocity_fields",
+          "line": 325,
+          "endLine": 362,
+          "needles": [
+            "compute_f_gradient",
+            "vel_pointers",
+            "dim_ratio_hi_pt"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "ComputeInitialConditions",
+          "line": 593,
+          "endLine": 595,
+          "needles": [
+            "vel_pointers",
+            "lowres_vx",
+            "lowres_vz"
+          ]
+        }
+      ]
     },
     {
       "id": "second_order_velocity",
@@ -860,7 +1304,31 @@
       "reviewSection": "",
       "implementedAs": "InitialConditions.c:366 compute_velocity_fields_2LPT()：用二阶位移场的源项在 k 空间解出二阶位移，写进 boxes->lowres_vx_2LPT / vy / vz（指针在 :596 绑定）。整段由开关 SECOND_ORDER_LPT_ICS 控制。",
       "theory": "二阶拉格朗日微扰（2LPT）修正一阶位移在小尺度上的偏差。代码里它与一阶并列、各有一套格子场，所以单列。",
-      "codeRef": "InitialConditions.c:366 compute_velocity_fields_2LPT()（:596 vel_pointers_2LPT 绑定 boxes->lowres_vx_2LPT）"
+      "codeRef": "InitialConditions.c:366 compute_velocity_fields_2LPT()（:596 vel_pointers_2LPT 绑定 boxes->lowres_vx_2LPT）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "compute_velocity_fields_2LPT",
+          "line": 465,
+          "endLine": 498,
+          "needles": [
+            "component_ii",
+            "component_jj",
+            "component_ij"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/InitialConditions.c",
+          "symbol": "ComputeInitialConditions",
+          "line": 596,
+          "endLine": 599,
+          "needles": [
+            "vel_pointers_2LPT",
+            "lowres_vx_2LPT",
+            "lowres_vz_2LPT"
+          ]
+        }
+      ]
     },
     {
       "id": "perturb_velocity",
@@ -885,9 +1353,33 @@
         "S10.6.1"
       ],
       "reviewSection": "",
-      "implementedAs": "PerturbedField.c:280 compute_perturbed_velocities(axis, redshift, ...)：扰动密度场在 k 空间乘方向分量得速度分量，:466 / :471 写进 perturbed_field->velocity_x / velocity_z。",
+      "implementedAs": "PerturbedField.c:280 compute_perturbed_velocities(axis, redshift, ...)：扰动密度场在 k 空间乘方向分量得速度分量，:465 / :467 / :470 三次调用分别写进 perturbed_field->velocity_x / velocity_y / velocity_z（velocity_y 只在 KEEP_3D_VELOCITIES 打开时算）。",
       "theory": "旧方案把 δ(x) 与 v(x) 写成一个符号；红移空间畸变与 dv/dr 判据用的是速度场，所以在「引力扰动」块里把两者分开。",
-      "codeRef": "PerturbedField.c:280 compute_perturbed_velocities()（:466/:471 写 perturbed_field->velocity_x / velocity_z）"
+      "codeRef": "PerturbedField.c:280 compute_perturbed_velocities()（:465/:467/:470 写 perturbed_field->velocity_x / velocity_y / velocity_z）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/PerturbedField.c",
+          "symbol": "compute_perturbed_velocities",
+          "line": 336,
+          "endLine": 375,
+          "needles": [
+            "dDdt_over_D",
+            "kvec",
+            "velocity_fft_grid"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/PerturbedField.c",
+          "symbol": "ComputePerturbedField",
+          "line": 464,
+          "endLine": 471,
+          "needles": [
+            "compute_perturbed_velocities",
+            "velocity_x",
+            "velocity_z"
+          ]
+        }
+      ]
     },
     {
       "id": "filtered_sfr",
@@ -914,7 +1406,20 @@
       "reviewSection": "",
       "implementedAs": "SpinTemperatureBox.c:762 的 one_annular_filter(halobox->halo_sfr, &(source_box->filtered_sfr[R_ct * HII_TOT_NUM_PIXELS]), R_inner, R_outer, ...)：把 HaloBox 的恒星形成率网格按 [R_inner, R_outer] 环壳滤波，逐红移切片写进 XraySourceBox.filtered_sfr。",
       "theory": "X 射线与 Lyα 的源项都要先按环壳平均：真源里「滤波场」与「它的体积平均」是两个字段，由同一次滤波给出。",
-      "codeRef": "SpinTemperatureBox.c:762-764 one_annular_filter(halobox->halo_sfr, &source_box->filtered_sfr[...])"
+      "codeRef": "SpinTemperatureBox.c:762-764 one_annular_filter(halobox->halo_sfr, &source_box->filtered_sfr[...])",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "UpdateXraySourceBox",
+          "line": 762,
+          "endLine": 764,
+          "needles": [
+            "filtered_sfr",
+            "halo_sfr",
+            "one_annular_filter"
+          ]
+        }
+      ]
     },
     {
       "id": "mean_sfr",
@@ -939,9 +1444,22 @@
         "S14.3.1"
       ],
       "reviewSection": "",
-      "implementedAs": "同一支环形滤波顺带给出的体积平均：SpinTemperatureBox.c:743 算得 fsfr_avg，:769 写进 source_box->mean_sfr[R_ct]。后续 SFRD 自洽修正（ts_main 里的 avg_fix_term，:1619）读它。",
+      "implementedAs": "同一支环形滤波顺带给出的体积平均：SpinTemperatureBox.c:762-764 的 one_annular_filter 输出 fsfr_avg，:769 写进 source_box->mean_sfr[R_ct]。它是 XraySourceBox 的输出字段（`_outputstructs_wrapper.h:73`），C 侧没有别的读取方。",
       "theory": "「滤波场」与「它的平均」是一次滤波的两个输出：真源里分成两个成员，块内关系记这条事实。",
-      "codeRef": "SpinTemperatureBox.c:743 fsfr_avg → :769 source_box->mean_sfr[R_ct]"
+      "codeRef": "SpinTemperatureBox.c:762-764 fsfr_avg → :769 source_box->mean_sfr[R_ct]",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "UpdateXraySourceBox",
+          "line": 762,
+          "endLine": 769,
+          "needles": [
+            "mean_sfr",
+            "fsfr_avg",
+            "filtered_sfr"
+          ]
+        }
+      ]
     },
     {
       "id": "gamma_12",
@@ -968,7 +1486,20 @@
       "reviewSection": "§3.3 H II 区的增长",
       "implementedAs": "IonisationBox.c:1123 / :1127（find_ionised_regions）在判到格点被电离时写 box->ionisation_rate_G12[index_r]（单位 1e12 s⁻¹）。下一红移由 reionization_feedback 读去改 M_turn（见 feedback 里的 M9→M6）。",
       "theory": "电离反馈要的是格点上的电离光子率：它在本步算出、存在 IonizedBox 里，跨红移回到「网格化源项」。",
-      "codeRef": "IonisationBox.c:1123/:1127 box->ionisation_rate_G12[index_r] 写入"
+      "codeRef": "IonisationBox.c:1123/:1127 box->ionisation_rate_G12[index_r] 写入",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1123,
+          "endLine": 1129,
+          "needles": [
+            "box->ionisation_rate_G12",
+            "gamma_prefactor",
+            "rspec.R"
+          ]
+        }
+      ]
     },
     {
       "id": "recomb",
@@ -991,9 +1522,21 @@
         "S13"
       ],
       "reviewSection": "§3.3 H II 区的增长",
-      "implementedAs": "IonisationBox.c:1291-1292（set_recombination_rates）：本轮复合量 dNrec（:1277 由 splined_recombination_rate 与 dt 算得）累加到上一红移的 cumulative_recombinations 上，写进 box->cumulative_recombinations[idx]。",
+      "implementedAs": "IonisationBox.c:1291-1292（set_recombination_rates）：该红移步的复合量 dNrec（:1277 由 splined_recombination_rate 与 dt 算得）累加到上一红移的 cumulative_recombinations 上，写进 box->cumulative_recombinations[idx]。",
       "theory": "复合是电离平衡里的一阶项：累积量跨红移累加，所以在 IonizedBox 里是一个逐格点的历史量，也是电离判据的输入（:1085 读回）。",
-      "codeRef": "IonisationBox.c:1291-1292 box->cumulative_recombinations[idx] = previous + dNrec"
+      "codeRef": "IonisationBox.c:1291-1292 box->cumulative_recombinations[idx] = previous + dNrec",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "set_recombination_rates",
+          "line": 1277,
+          "endLine": 1292,
+          "needles": [
+            "box->cumulative_recombinations",
+            "dNrec"
+          ]
+        }
+      ]
     },
     {
       "id": "mfp",
@@ -1020,7 +1563,19 @@
       "reviewSection": "§3.3 H II 区的增长",
       "implementedAs": "IonisationBox.c:1132：找到电离区时把该处半径 rspec.R 写进 box->mean_free_path[index_r]。R 由气泡半径的积分判据逐格点给出（:1119 的 neutral_fraction 判据之内）。",
       "theory": "电离区尺寸就是光子的平均自由程，是 IonizedBox 的独立字段（电离场统计与光深读它）。",
-      "codeRef": "IonisationBox.c:1132 box->mean_free_path[index_r] = rspec.R"
+      "codeRef": "IonisationBox.c:1132 box->mean_free_path[index_r] = rspec.R",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1131,
+          "endLine": 1133,
+          "needles": [
+            "box->mean_free_path",
+            "rspec.R"
+          ]
+        }
+      ]
     },
     {
       "id": "z_reion",
@@ -1047,18 +1602,31 @@
       "reviewSection": "§3.3 H II 区的增长",
       "implementedAs": "IonisationBox.c:1137-1140（find_ionised_regions）：格点首次电离时记下当前红移 box->z_reion[index_r] = consts->redshift，否则沿用 previous_ionize_box->z_reion[index_r]；全程初始化为 -1（:379 / :1360）。",
       "theory": "逐格点的再电离时刻：它是电离反馈 M_turn_r 的输入（reionization_feedback(z, Γ_12, z_reion)），所以在 IonizedBox 里保留。",
-      "codeRef": "IonisationBox.c:1138 box->z_reion[index_r]（首次电离时记下红移）"
+      "codeRef": "IonisationBox.c:1138 box->z_reion[index_r]（首次电离时记下红移）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1137,
+          "endLine": 1141,
+          "needles": [
+            "box->z_reion",
+            "previous_ionize_box->z_reion",
+            "consts->redshift"
+          ]
+        }
+      ]
     }
   ],
   "blocks": {
-    "note": "一级（主图）的划分依据：**代码作者划定的模块边界**——一个块 = 一个输出盒子 / 一个 Compute* 步 / 一个主导 .c 文件（判据与旧稿的「天体物理过程」不同）。纪律：`nodes` + `drivers` 里每个物理量**恰好**属于一个块或层（不重不漏，自检钉住）；块内成员之间的边留到子图画，块间接口边留在主图画。**层（kind=layer）不是过程**：两个层都带成员清单（共享内核层的成员是公共头文件），层不可进入子图、不计入过程数。**位置用 `order`，不用手写因果档位**：代码里没有层级，只有「一个红移内的调用顺序」（由主序边决定）与「跨红移回流」（见 `feedback`）；`order` 只是主序位次，MUST NOT 参与筛人。块不给圆圈数字（同屏已有三套 ⓪…⑨）。",
+    "note": "一级（主图）的划分依据：**代码作者划定的模块边界**——一个块 = 一个输出盒子 / 一个 Compute* 步 / 一个主导 .c 文件（判据与旧稿的「天体物理过程」不同）。纪律：`nodes` + `drivers` 里每个物理量**恰好**属于一个块或层（不重不漏，自检钉住）；块内成员之间的边留到子图画，块间接口边留在主图画。**层（kind=layer）不是过程**：它不可进入子图、不计入过程数。**位置用 `order`，不用手写因果档位**：代码里没有层级，只有「一个红移内的调用顺序」（由主序边决定）与「跨红移回流」（见 `feedback`）；`order` 只是主序位次，MUST NOT 参与筛人。块不给圆圈数字（同屏已有三套 ⓪…⑨）。",
     "items": [
       {
         "id": "block:const",
-        "label": "常数与网格层",
+        "label": "常数与网格",
         "kind": "layer",
         "order": 0,
-        "noteDoc": "physics-chain/modules/const.md",
+        "phase": "layer",
         "members": [
           "tgamma"
         ],
@@ -1069,61 +1637,14 @@
           ],
           "struct": "PhysicalConstants"
         },
-        "note": "最底层：T_γ 等常数与网格尺寸在这里定死，不随红移变。代码锚 Constants.c（.T_cmb = 2.7255，:25）+ SimulationOptions（HII_DIM / DIM / BOX_LEN / Z_HEAT_MAX）。"
-      },
-      {
-        "id": "block:kernel",
-        "label": "共享内核层",
-        "kind": "layer",
-        "order": 0,
-        "noteDoc": "physics-chain/modules/kernel.md",
-        "members": [
-          "cosmology.h",
-          "hmf.h",
-          "interp_tables.h",
-          "dft.h",
-          "thermochem.h",
-          "filtering.h",
-          "scaling_relations.h",
-          "fdm.h",
-          "Stochasticity.h",
-          "elec_interp.h",
-          "heating_helper_progs.h",
-          "map_mass.h",
-          "photoncons.h",
-          "bubble_helper_progs.h",
-          "recombinations.h",
-          "LuminosityFunction.h"
-        ],
-        "codeAnchor": {
-          "kind": "files",
-          "files": [
-            "cosmology.h",
-            "hmf.h",
-            "interp_tables.h",
-            "dft.h",
-            "thermochem.h",
-            "filtering.h",
-            "scaling_relations.h",
-            "fdm.h",
-            "Stochasticity.h",
-            "elec_interp.h",
-            "heating_helper_progs.h",
-            "map_mass.h",
-            "photoncons.h",
-            "bubble_helper_progs.h",
-            "recombinations.h",
-            "LuminosityFunction.h"
-          ]
-        },
-        "note": "共享内核层：被多个 .c 一起 #include 的公共头文件，按引用它的 .c 个数排序（cosmology.h 21、hmf.h 11、interp_tables.h 11、dft.h 8、thermochem.h 8、filtering.h 7、scaling_relations.h 5、fdm.h 4、heating_helper_progs.h 3、map_mass.h 3、Stochasticity.h 3、photoncons.h 3、elec_interp.h 3、recombinations.h 2、bubble_helper_progs.h 2、LuminosityFunction.h 1）。层的成员是**文件**不是物理量，所以不计入 28 个对象。fdm.h 是本 fork 自带（上游 v4.1.1 无此文件），横切「宇宙学背景与物质功率谱」与「晕目录与质量函数」"
+        "note": "链上唯一不随红移重算的一层：微波背景温度被观测钉在黑体上（今天 2.7255 K，随膨胀按红移因子线性升高），后面所有温度都相对它算；盒子边长与网格数也在这里定死，决定每张场能分辨到多小的尺度。它不含演化方程、也不随红移更新——只是把这两样给定下来，往下每个块都按它算。"
       },
       {
         "id": "block:cosmo",
         "label": "宇宙学背景与物质功率谱",
         "kind": "process",
         "order": 1,
-        "noteDoc": "physics-chain/modules/cosmo.md",
+        "phase": "prep",
         "members": [
           "matter_power",
           "transfer_fn"
@@ -1134,14 +1655,14 @@
           "function": "init_ps",
           "struct": "CosmoTables"
         },
-        "note": "最底层：线性功率谱与 σ(R) / dσ²/dM 表——宇宙学参数先整理成常数，再逐模求值，供质量函数插值。旧稿没有这一块：它按论文等式切，把线性功率谱当成给定输入。"
+        "note": "把原初那条近似尺度不变的谱搬到物质时代：进视界早的小尺度模被辐射拖住、长得慢，于是功率谱在大尺度保留原初斜率、在小尺度转成更陡的下降，再按今天的振幅归一；转移函数只随波数变、与红移无关，时间演化全留给生长因子。这一张谱连同它按尺度积分出来的质量方差，是后面晕丰度与塌缩分数的全部底料——红移只改振幅、不改形状。"
       },
       {
         "id": "block:initial",
         "label": "初始条件",
         "kind": "process",
         "order": 2,
-        "noteDoc": "physics-chain/modules/initial.md",
+        "phase": "prep",
         "members": [
           "vcb",
           "initial_density",
@@ -1154,14 +1675,14 @@
           "function": "ComputeInitialConditions",
           "struct": "InitialConditions"
         },
-        "note": "产出线性密度场、位移场与 lowres_vcb（相对速度场）。它同时是三条反馈里\"相对速度\"那一条的源头，下游网格化源项直接拿它当参数。"
+        "note": "这一盒初始条件一次定下，之后每个红移都在它上面重算：线性高斯随机密度场（功率谱给振幅、相位随机），连同它的一阶与二阶拉格朗日位移场——位移场把物质被引力搬走的那段运动提前写好，尺度越小修正越明显。重子与暗物质在复合前后受力不同，还留下一条相对速度场：复合时几十千米每秒、相干长度几个百万秒差距，随膨胀衰减，但到宇宙黎明仍足以压低小晕里的成核与冷却。"
       },
       {
         "id": "block:grav",
         "label": "引力扰动",
         "kind": "process",
         "order": 3,
-        "noteDoc": "physics-chain/modules/grav.md",
+        "phase": "prep",
         "members": [
           "perturb_field",
           "perturb_velocity"
@@ -1172,14 +1693,14 @@
           "function": "ComputePerturbedField",
           "struct": "PerturbedField"
         },
-        "note": "代码锚 PerturbedField.c（高分辨→低分辨的一阶拉格朗日位移重映射，辅助函数在 map_mass.c）。下游的「晕目录与质量函数」「气体热与自旋温度」「电离场」「亮温与观测」都拿它当参数。"
+        "note": "把初始扰动接成随红移演化的物质场：初始密度场先按生长因子整体缩放，再在低分辨体元的尺度上做顶帽平均，得到每个体元一个值的密度对比图（负值截到零）；同一批扰动还给出一张低分辨速度场，它的纵向部分就是密度场的梯度。下游的塌缩分数、电离场与红移空间畸变都拿这一张图当底场，代价是体元尺度以下的起伏被抹平——它只描述大尺度图案。"
       },
       {
         "id": "block:halocat",
         "label": "晕目录与质量函数",
         "kind": "process",
         "order": 4,
-        "noteDoc": "physics-chain/modules/halocat.md",
+        "phase": "prep",
         "members": [
           "hmf_impl",
           "dn_dm",
@@ -1192,14 +1713,14 @@
           "function": "ComputeHaloCatalog",
           "struct": "HaloCatalog"
         },
-        "note": "旧稿把「晕质量函数」与「晕质量阈值」切成两块，代码里是同一个 ComputeHaloCatalog + hmf.c + Stochasticity.c。M_turn 也在这一块的成员里（它被「网格化源项」的反馈改写，见 feedback）。"
+        "note": "回答「哪些晕算源、每个质量区间里有多少个」：先由物质功率谱做窗积分得到质量方差，再按选定的多重数公式给出单位质量区间里的晕数，它在源尺度附近陡降；同时把「气体要被引力留住并开始原子冷却」的维里温度门槛换算成质量，得到质量下限。门槛温度越高、红移越高，能成核的晕就越重，所以质量下限随红移升高而变小。这一步只定源的目录与下限，还不涉及每个晕有多亮。"
       },
       {
         "id": "block:galaxy",
         "label": "晕到星系属性",
         "kind": "process",
         "order": 5,
-        "noteDoc": "physics-chain/modules/galaxy.md",
+        "phase": "prep",
         "members": [
           "scaling_relations",
           "rho_star",
@@ -1213,14 +1734,15 @@
           "function": "ComputePerturbedHaloCatalog",
           "struct": "PerturbedHaloCatalog"
         },
-        "note": "旧稿的「星系形成与源项」在这里拆成两块：这一段只算**每个晕**的属性（scaling_relations.c + LuminosityFunction.c，旋钮 F_STAR10 / ALPHA_STAR / L_X / F_ESC10），网格化留给「网格化源项」。phi_uv 按产出模块归这里（ComputeLF 吃 hmf.h / thermochem.h / interp_tables.h）。"
+        "note": "把晕换算成星系属性：从晕质量出发，按恒星形成效率依次给出恒星质量的份额、恒星形成率、逃逸分数、金属性与 X 射线亮度——给定晕质量与红移就定下这一整套，参数逐红移更新一次。把这些属性按质量函数加权积分，得到单位体积的恒星形成率密度；同一套换算换到绝对星等轴，就是紫外光度函数，观测侧的星系光度分布由它回答。链上所有源项都从这一步出发：一个晕放多少电离光子、多少 X 射线，全看这里的效率与逃逸分数。"
       },
       {
         "id": "block:halobox",
         "label": "网格化源项",
         "kind": "process",
         "order": 6,
-        "noteDoc": "physics-chain/modules/halobox.md",
+        "phase": "loop",
+        "flowStep": 1,
         "members": [
           "source_grid",
           "nion",
@@ -1232,14 +1754,15 @@
           "function": "ComputeHaloBox",
           "struct": "HaloBox"
         },
-        "note": "把每个晕的属性摊到网格上，产出 halo_sfr / nion / halo_xray / whalo_sfr 四张网格（它是唯一一个把全部源项旋钮收进签名的步，作者在参数结构处专门点名过）。**三条反馈全部回到这一块**——它在签名里同时收 previous_spin_temp 与 previous_ionize_box。"
+        "note": "把离散的晕铺到三维网格上：每个格点按自己的平均密度定出格内能出现的最大塌缩质量，与全局的质量上下限一起给出该格点的条件质量函数；塌缩分数、恒星质量、恒星形成率、电离光子与 X 射线都用这一套条件积分，只是权重不同。产出的网格就是电离场与气体热史右侧的源项：恒星形成率密度乘上每个恒星形成活动放出的电离光子数与逃逸分数，得到电离光子发射率。把它折成塌缩分数的倍数，天体物理的不确定性就全落在综合电离效率那一个数上。"
       },
       {
         "id": "block:xray",
         "label": "X 射线源的历史卷积",
         "kind": "process",
         "order": 7,
-        "noteDoc": "physics-chain/modules/xray.md",
+        "phase": "loop",
+        "flowStep": 2,
         "members": [
           "filtered_xray",
           "filtered_sfr",
@@ -1251,14 +1774,15 @@
           "function": "UpdateXraySourceBox",
           "struct": "XraySourceBox"
         },
-        "note": "旧稿整块漏掉：XraySourceBox 是能单独缓存的盒子，有独立旋钮组（N_STEP_TS / R_MAX_TS / NU_X_* / HEAT_FILTER），coeval.py 里还要 force purge。函数体在 SpinTemperatureBox.c（:751），但它是独立一步。"
+        "note": "X 射线从源到气体要走过一段光程，所以这一步不能只看当前时刻：先把各尺度上的源做环带平均，再把历史上每一层源按光程衰减后往上累加——它记的是整段历史，每加高一层就多算一层壳。同一趟滤波顺带给出逐红移的恒星形成率场（供莱曼 α 背景与气体热史取用）与它的体积平均。气体热账上唯一的加热项，就是由这张带记忆的卷积场折出来的。"
       },
       {
         "id": "block:thermal",
         "label": "气体热与自旋温度",
         "kind": "process",
         "order": 8,
-        "noteDoc": "physics-chain/modules/thermal.md",
+        "phase": "loop",
+        "flowStep": 3,
         "members": [
           "eps_heat",
           "tk",
@@ -1273,14 +1797,15 @@
           "function": "ComputeTsBox",
           "struct": "TsBox"
         },
-        "note": "旧稿的「气体热史」+「Lyα 耦合」+「自旋温度」三块本来就是一次 ComputeTsBox（:87），合成一块。也是对象最多的一块（6 个），因为一次算出 T_K、J_α、x_α、x_c、T_S。"
+        "note": "一次算齐气体温度与自旋温度：X 射线沉积的能量先按电离度分摊，留在加热上的那一份还要带中性氢份额的因子，进气体热账；气体温度按绝热膨胀（两倍哈勃率降温）、X 射线加热与光子-电子散射（康普顿耦合）演化，是链上少数几条含时间导数的方程之一。自旋温度那头，恒星与 X 射线源给出莱曼 α 背景强度，经散射折算成耦合系数，碰撞耦合另走一条通道；三处耦合按调和平均角力，自旋温度因此被拉向光子温度、莱曼 α 色温或气体温度，它要自洽解出来。"
       },
       {
         "id": "block:ionization",
         "label": "电离场",
         "kind": "process",
         "order": 9,
-        "noteDoc": "physics-chain/modules/ionization.md",
+        "phase": "loop",
+        "flowStep": 4,
         "members": [
           "q_hii",
           "gamma_12",
@@ -1294,19 +1819,19 @@
           "function": "ComputeIonizedBox",
           "struct": "IonizedBox"
         },
-        "note": "**电离吃自旋温度**：这一步的入参就带着自旋温度框（TsBox *spin_temp），函数体直接读 J_21_LW / xray_ionised_fraction / kinetic_temp_neutral，所以「气体热与自旋温度」→「电离场」是签名决定的硬边，不是可选的诊断分支。"
+        "note": "电离场算的是气泡长到了哪一步：源项是电离光子发射率除以平均氢数密度，复合项正比于电离分数本身与复合系数、并随膨胀越来越容易发生，两者相减推进出电离份额。逐格点还记下光致电离率、跨红移累加的复合数、电离区能长到的尺度上限，以及每个格点第一次被电离的红移——再电离的先后顺序因此完整留下。屏蔽判据与莱曼 α 强度都要看逐格点的自旋温度，所以它接在气体热与自旋温度后面。"
       },
       {
         "id": "block:obs",
         "label": "亮温与观测",
         "kind": "process",
         "order": 10,
-        "noteDoc": "physics-chain/modules/obs.md",
+        "phase": "loop",
+        "flowStep": 5,
         "members": [
           "dtb",
           "p21",
-          "tau_e",
-          "k_target"
+          "tau_e"
         ],
         "codeAnchor": {
           "kind": "compute",
@@ -1314,17 +1839,16 @@
           "function": "ComputeBrightnessTemp",
           "struct": "BrightnessTemp"
         },
-        "note": "旧稿的「观测量」是一条带，把 p21/tau_e 和 phi_uv 混在一起；这里只放亮温这一支（ComputeBrightTemp + ComputeTau + 光锥）。k_target 是分析侧输入（P_21(k) 要先有 k），不是观测量。"
+        "note": "把链上的量折成能跟观测比的数：差分亮温由三样相乘——中性氢份额、自旋温度与光子温度的相对差，以及按宇宙学参数与红移算出的前因子；自旋温度低于光子温度时是吸收（亮温为负），高于时是发射，量级几十毫开尔文。沿整段红移历史积分自由电子，得到微波背景光子被散射的累积概率，即汤姆逊光深——微波背景侧对再电离最直接的约束就是它。盒子在波数空间做统计给出 21 厘米功率谱。"
       }
     ]
   },
   "processes": {
-    "note": "左栏第二个检索面的真源：**天体物理过程**（旧稿一级的口径——「一个过程 = 一组按等式串起来的量，能独立读懂」，划分依据是**按论文等式打包**）。与本文件的 `blocks`（代码模块划分）**并存**，不是同一层：过程 → 主块是**多对一**（如「气体热史」「Lyα 耦合」「自旋温度」三个过程同属「气体热与自旋温度」这一个块）。逐条转录自旧稿的 `blocks.items`（`kind: process` 的 8 条 + `kind: band` 的 2 条），成员 id 一律沿用现真源 id、不新增对象。**不编号**：同屏已有三套 ⓪…⑨。纪律：这 8 个过程 + 2 条带的成员并集 + `uncovered.members` 必须**恰好**等于 `nodes` + `drivers` 的全部 id（不重不漏，自检钉住）。`fit` 只收**代码注释里真实出现的引用**（口径同 `papers.md`，逐条带 `文件:行`），查不到的**留空、不许推断**。",
+    "note": "左栏第二个检索面的真源：**天体物理过程**（一个过程 = 一组按等式串起来的量，能独立读懂）。与本文件的 `blocks`（代码模块划分）**并存**，不是同一层：过程 → 主块是**多对一**（如「气体热史」「Lyα 耦合」「自旋温度」三个过程同属「气体热与自旋温度」这一个块）。现有 12 条过程：旧稿的 8 条过程逐条转录（成员 id 沿用现真源 id、不新增对象），另外四条按**模块主题**就近立条（宇宙学背景与物质功率谱 / 初始条件 / 引力扰动 / X 射线源的历史卷积）——名字与公式口径求「相近、看得懂」即可，不硬凑逐条代码行。旧稿那两条「带」（环境与给定 / 观测量）不再单列：它们的成员按块归属与依赖就近并入相关过程（`fstar` / `phi_uv` 并入「星系形成与源项」，`tgamma` / `p21` / `tau_e` 并入「亮温与观测」）。**不编号**：同屏已有三套 ⓪…⑨。纪律：12 个过程的成员并集必须**恰好**等于 `nodes` + `drivers` 的全部 id（不重不漏，自检钉住）。`fit` 写这条过程用到的公式或近似（能带上出处更好；写不出就留空）。",
     "items": [
       {
         "id": "process:hmf",
         "label": "暗物质晕质量函数",
-        "kind": "process",
         "members": [
           "hmf_impl",
           "dn_dm"
@@ -1336,7 +1860,6 @@
       {
         "id": "process:mmin",
         "label": "晕质量阈值",
-        "kind": "process",
         "members": [
           "tvir_min",
           "mmin"
@@ -1348,20 +1871,20 @@
       {
         "id": "process:galaxy",
         "label": "星系形成与源项",
-        "kind": "process",
         "members": [
+          "fstar",
           "scaling_relations",
           "rho_star",
+          "phi_uv",
           "source_grid"
         ],
         "primaryBlock": "block:galaxy",
         "fit": "UV 光度函数（Schechter 形式）Sun & Furlanetto 2016（`LuminosityFunction.c:2`）；旋钮参数化见 Greig+2018 Eq.11 与 Park+2018 Sec 2.1（`inputs.py`）",
-        "note": "旧稿 ③。现真源拆成「晕到星系属性」（每个晕的属性）+「网格化源项」（网格化），3 个成员里 2 个在「晕到星系属性」，主块取它。"
+        "note": "旧稿 ③。现真源拆成「晕到星系属性」（每个晕的属性）+「网格化源项」（网格化），主块取前者；`f*` 是这一支的效率旋钮量，`φ(M_1500,z)` 是它的观测量出口（依赖 `f*` / `M_min` / `ρ̇*`）——两个都落在「晕到星系属性」里，与 `ρ̇*(z)` 同一条链。"
       },
       {
         "id": "process:ionization",
         "label": "电离史",
-        "kind": "process",
         "members": [
           "zeta",
           "nion",
@@ -1378,7 +1901,6 @@
       {
         "id": "process:thermal",
         "label": "气体热史",
-        "kind": "process",
         "members": [
           "lx",
           "eps_heat",
@@ -1391,7 +1913,6 @@
       {
         "id": "process:lya",
         "label": "Lyα 耦合",
-        "kind": "process",
         "members": [
           "jalpha",
           "xalpha"
@@ -1403,7 +1924,6 @@
       {
         "id": "process:spin",
         "label": "自旋温度",
-        "kind": "process",
         "members": [
           "xc",
           "ts"
@@ -1414,57 +1934,68 @@
       },
       {
         "id": "process:dtb",
-        "label": "亮温方程",
-        "kind": "process",
-        "members": [
-          "dtb"
-        ],
-        "primaryBlock": "block:obs",
-        "fit": "",
-        "note": "旧稿 ⑧。经典理论过程（亮温方程本身），按 README「论文索引只挂拟合公式/经验模型」的口径不挂论文，故 `fit` 留空。"
-      },
-      {
-        "id": "band:env",
-        "label": "环境与给定",
-        "kind": "band",
+        "label": "亮温与观测",
         "members": [
           "tgamma",
-          "fstar",
-          "k_target"
-        ],
-        "primaryBlock": "block:const",
-        "fit": "",
-        "note": "旧稿 ⓪，`kind: band`——**不是过程**（成员之间没有块内边，进不去子图）。三个成员在现真源分属「常数与网格层」/「晕到星系属性」/「亮温与观测」，主块按平票取「常数与网格层」。"
-      },
-      {
-        "id": "band:obs",
-        "label": "观测量",
-        "kind": "band",
-        "members": [
+          "dtb",
           "p21",
-          "phi_uv",
           "tau_e"
         ],
         "primaryBlock": "block:obs",
         "fit": "",
-        "note": "旧稿 ⑨，`kind: band`——**不是过程**。p21 / tau_e 在「亮温与观测」，phi_uv 按产出模块归「晕到星系属性」，主块取「亮温与观测」。"
+        "note": "旧稿 ⑧。亮温这一支在代码里只算 `δT_b`（`ComputeBrightnessTemp`），`P_21` 与 `τ_e` 是它的观测量出口（`P_21` 由分析层对亮温盒子做 k 空间统计，`τ_e` 由电离史积分）；`T_γ` 是外源、直接进 `δT_b` 的式子，一并收在这一条里。"
+      },
+      {
+        "id": "process:cosmo",
+        "label": "宇宙学背景与物质功率谱",
+        "members": [
+          "matter_power",
+          "transfer_fn"
+        ],
+        "primaryBlock": "block:cosmo",
+        "fit": "线性理论：转移函数（k 的一维解析式）→ 线性物质功率谱与 σ(R)，无拟合旋钮。",
+        "note": "按模块主题就近立条（旧稿没有这一条）：主块「宇宙学背景与物质功率谱」，两个成员都在这个块里。宇宙学参数 → 转移函数 → 功率谱这一步，公式出处没写在代码注释里，`fit` 只写这层关系。"
+      },
+      {
+        "id": "process:initial",
+        "label": "初始条件",
+        "members": [
+          "initial_density",
+          "zeldovich_velocity",
+          "second_order_velocity",
+          "vcb"
+        ],
+        "primaryBlock": "block:initial",
+        "fit": "拉格朗日微扰论：线性初始密度场 + 一阶（Zel'dovich）位移 + 二阶位移；重子-暗物质相对速度按给定功率谱抽样。",
+        "note": "按模块主题就近立条（旧稿没有这一条）：主块「初始条件」，四个成员都在这个块里。"
+      },
+      {
+        "id": "process:grav",
+        "label": "引力扰动",
+        "members": [
+          "perturb_field",
+          "perturb_velocity"
+        ],
+        "primaryBlock": "block:grav",
+        "fit": "把初始条件推到扰动位置并给出低分辨速度场，无新拟合式。",
+        "note": "按模块主题就近立条（旧稿没有这一条）：主块「引力扰动」。"
+      },
+      {
+        "id": "process:xray",
+        "label": "X 射线源的历史卷积",
+        "members": [
+          "filtered_xray",
+          "filtered_sfr",
+          "mean_sfr"
+        ],
+        "primaryBlock": "block:xray",
+        "fit": "沿红移对整段历史做卷积：每个红移切片上做环壳滤波再累加，X 射线能谱走参数化，无闭合拟合式。",
+        "note": "按模块主题就近立条（旧稿没有这一条）：主块「X 射线源的历史卷积」。旧稿把 X 射线放在「气体热史」那一条里（成员 `lx` / `eps_heat`），这里单列的是**源项卷积**这一段。"
       }
     ],
     "uncovered": {
-      "note": "旧划分早于代码模块划分，覆盖不到的量：出生在旧稿之后的「宇宙学背景与物质功率谱」「初始条件」「引力扰动」三个新模块，加上 X 射线卷积（现真源里它单独成块）。**不替它们编过程名**（本仓「不凭印象补」纪律），由过程面的常驻兜底小节展示。",
-      "members": [
-        "matter_power",
-        "transfer_fn",
-        "vcb",
-        "initial_density",
-        "zeldovich_velocity",
-        "second_order_velocity",
-        "perturb_field",
-        "perturb_velocity",
-        "filtered_xray",
-        "filtered_sfr",
-        "mean_sfr"
-      ]
+      "note": "兜底名单：**现为空**——旧划分之后新增的四个模块（宇宙学背景与物质功率谱 / 初始条件 / 引力扰动 / X 射线源的历史卷积）已按模块主题就近立条，过程面现在覆盖全部 11 个模块：12 条过程 = 全部 38 个物理量（不重不漏）。",
+      "members": []
     }
   },
   "edges": [
@@ -1497,7 +2028,7 @@
       "to": "perturb_velocity",
       "eq": "",
       "page": "",
-      "codeRef": "PerturbedField.c:455（写 density）→ :466/:471 compute_perturbed_velocities()",
+      "codeRef": "PerturbedField.c:455（写 density）→ :465/:467/:470 compute_perturbed_velocities()",
       "note": "密度场写入之后，同一支计算在 k 空间把它的方向分量接成速度场。"
     },
     {
@@ -1505,8 +2036,8 @@
       "to": "mean_sfr",
       "eq": "",
       "page": "",
-      "codeRef": "SpinTemperatureBox.c:743 fsfr_avg → :769 source_box->mean_sfr[R_ct]",
-      "note": "同一次环形滤波同时给出滤波场与它的体积平均；平均量供后续 SFRD 自洽修正（avg_fix_term）用。"
+      "codeRef": "SpinTemperatureBox.c:762-764 fsfr_avg → :769 source_box->mean_sfr[R_ct]",
+      "note": "同一次环形滤波同时给出滤波场与它的体积平均；平均量是 XraySourceBox 的输出字段，C 侧没有别的读取方。"
     },
     {
       "from": "gamma_12",
@@ -1739,13 +2270,6 @@
       "page": 8
     },
     {
-      "from": "k_target",
-      "to": "p21",
-      "eq": "Eq.11",
-      "page": 6,
-      "note": "P_21 是「指定波数处的功率谱」：Eq.11 的 P_21(k) 必须先有 k。原先缺这条边，k 成了零边孤立节点（k 不在 inputs.py 里，是分析侧自选波数，见 drivers 里的说明）"
-    },
-    {
       "from": "hmf_impl",
       "to": "dn_dm",
       "eq": "Eq.1 的实现",
@@ -1793,12 +2317,12 @@
       "note": "签名事实：ComputeIonizedBox(..., InitialConditions *ini_boxes, ...) 收 InitialConditions。"
     },
     {
-      "from": "perturb_field",
+      "from": "initial_density",
       "to": "dn_dm",
       "eq": "",
       "page": "",
-      "codeRef": "HaloCatalog.c:3",
-      "note": "签名事实：ComputeHaloCatalog 收的是线性过密度场的 k 空间盒（文件头注释第一句）。"
+      "codeRef": "HaloCatalog.c:38",
+      "note": "签名事实：ComputeHaloCatalog(..., InitialConditions *boxes, ...) 收 InitialConditions、不收 PerturbedField；密度取自 boxes->hires_density（:143）与 boxes->lowres_density（:405），再由内部乘增长因子推到目标红移（Stochasticity.c:846）——这条依赖走的是线性过密度场，不是 2LPT 位移后的 δ(x)（文件头 :3 自述 linear overdensity field）。"
     },
     {
       "from": "perturb_field",
@@ -2139,8 +2663,7 @@
         "paper": "",
         "gatesEdges": [
           "ts->dtb"
-        ],
-        "basis": "code（读点在 HaloBox.c:77,142,173,223,278,410 与 BrightnessTemperatureBox.c:75——**不在 SpinTemperatureBox**；docstring: Whether to perform IGM spin temperature fluctuations）。2026-09-29 对照代码后修正：原先误挂在 eps_heat->tk"
+        ]
       },
       {
         "name": "USE_X_RAY_HEATING",
@@ -2151,8 +2674,7 @@
         "paper": "",
         "gatesEdges": [
           "eps_heat->tk"
-        ],
-        "basis": "code（读点全在 SpinTemperatureBox.c:150,267,1242,1536,1703,1764,1812；docstring: Whether to include X-ray heating）"
+        ]
       },
       {
         "name": "USE_CMB_HEATING",
@@ -2163,8 +2685,7 @@
         "paper": "Meiksin 2021, arXiv:2105.14516（inputs.py:1026）",
         "gatesEdges": [
           "tgamma->tk"
-        ],
-        "basis": "code（读点仅 SpinTemperatureBox.c:1248，那里正是 CMB/康普顿加热项；docstring 引 Meiksin 2021 Eq.4）"
+        ]
       },
       {
         "name": "USE_LYA_HEATING",
@@ -2173,10 +2694,7 @@
         "default": true,
         "switch": true,
         "paper": "Reis+2021, doi:10.1093/mnras/stab2089（inputs.py:1028）",
-        "gatesEdges": [
-          "eps_heat->tk"
-        ],
-        "basis": "code（读点在 SpinTemperatureBox.c:150,156,166,175,252,260,276,472 等；docstring 引 Reis+2021 Sec.3）。它作用于自旋温度盒内部的加热项，图上挂在最近的加热边上"
+        "gatesEdges": []
       },
       {
         "name": "USE_EXP_FILTER",
@@ -2187,8 +2705,7 @@
         "paper": "Davies & Furlanetto 2021（inputs.py:1051,1055）",
         "gatesEdges": [
           "nion->q_hii"
-        ],
-        "basis": "code（IonisationBox.c:614：filter_hf = USE_EXP_FILTER ? 3 : consts->hii_filter —— 换的是电离盒里的滤波核；docstring 引 Davies & Furlanetto 2021）"
+        ]
       },
       {
         "name": "USE_MINI_HALOS",
@@ -2198,9 +2715,9 @@
         "switch": true,
         "paper": "Qin+2020（inputs.py 的 USE_MINI_HALOS 说明段）",
         "gatesEdges": [
-          "rho_star->nion"
-        ],
-        "basis": "code（读点在 HaloBox.c:85,135,176,185,220,235,270，与 USE_TS_FLUCT 并列；docstring 要求同时开 USE_TS_FLUCT/INHOMO_RECO）。**已证实改源项**。2026-09-29 改挂：挂回**表面**那条公式关系 `ρ̇* → Ṅ_ion`；它在代码上落在哪一段（离散晕累加 / 条件积分表）属子图，见 `source_grid` 的 choices"
+          "rho_star->nion",
+          "rho_star->jalpha"
+        ]
       },
       {
         "name": "USE_UPPER_STELLAR_TURNOVER",
@@ -2210,9 +2727,9 @@
         "switch": true,
         "paper": "",
         "gatesEdges": [
-          "fstar->scaling_relations"
-        ],
-        "basis": "code（scaling_relations.c:306,336 —— 落在恒星标度关系那一支，即 f* 的取值；2026-09-29 扩链后该支独立成节点，挂点随新边从 fstar->rho_star 移到 fstar->scaling_relations）"
+          "fstar->scaling_relations",
+          "lx->eps_heat"
+        ]
       },
       {
         "name": "PHOTON_CONS_TYPE",
@@ -2222,9 +2739,9 @@
         "switch": true,
         "paper": "",
         "gatesEdges": [
-          "rho_star->nion"
-        ],
-        "basis": "code（IonisationBox.c:1373 与 scaling_relations.c:70,72,125,127 —— 改的是 Nion 的计算）。2026-09-29 改挂：挂回**表面**那条公式关系 `ρ̇* → Ṅ_ion`；代码落在哪一段属子图，见 `source_grid` 的 choices"
+          "rho_star->nion",
+          "nion->q_hii"
+        ]
       },
       {
         "name": "INHOMO_RECO",
@@ -2233,8 +2750,9 @@
         "default": null,
         "switch": true,
         "paper": "",
-        "gatesEdges": [],
-        "basis": "待挂：它属 `AstroOptions`（inputs.py:1092 `INHOMO_RECO: bool = field(default=False)`），是效应开关，但**还没定该挂到哪条边上**——2026-09-29 从 astro 组归位过来（当时按解析器结果误当成数值参数）。默认值 false 现已由生成器从源码读出（同日修掉解析器两处缺陷：只认全大写字段名、把类文档里的说明行当成字段定义）"
+        "gatesEdges": [
+          "recomb->q_hii"
+        ]
       }
     ]
   },
@@ -2349,11 +2867,11 @@
       "p21": {
         "how": "分析层：对 δT_b 的盒子做 k 空间统计（代码核心不产出它）",
         "when": "分析时对指定波数算一次",
-        "discretization": "K_TARGET（分析侧自选波数，不是模型参数）",
+        "discretization": "分析侧自选的采样波数（不是模型参数）",
         "where": "**代码不产出**（这是正面结论，不是没搜到）：核心只输出盒子、光锥与全局历史——产物清单 P01–P17 里没有功率谱；P_21 是分析层拿 δT_b 的盒子做 k 空间统计得到的。所以这个节点没有源码落点，属已知情况。"
       },
       "phi_uv": {
-        "how": "Eq.12–Eq.14 的 Schechter 解析式，参数由 ρ̇* 给出",
+        "how": "把晕质量函数换元到 UV 星等轴：φ = |dM_1500/dM_h|^{-1} · (dn/dM_h) · exp(−M_turn/M_h) · f_duty。M_1500(M_h) 由 SFR 折出（SFR = M_h · Ω_b/Ω_m · F_⋆ · H(z)/t_STAR，再乘 Luv_over_SFR 到星等 51.63 − 2.5log10(SFR·Luv_over_SFR)）；F_⋆ 用单幂律（正常支 F_STAR10/ALPHA_STAR，分子冷却支 F_STAR7_MINI/ALPHA_STAR_MINI）并截断到 1；F_⋆ 过 1 处对 |dM_1500/dM_h| 做样条平滑；log10φ 下限截到 −30。**不拟合 Schechter**（论文形式见 theory）",
         "when": "每个红移一次（诊断，不推进主链——L4 · S12.3.1 原文）",
         "discretization": "—",
         "where": "src/py21cmfast/src/LuminosityFunction.c ComputeLF"
@@ -2377,10 +2895,10 @@
         "where": "src/py21cmfast/src/cosmology.c"
       },
       "fstar": {
-        "how": "输入参数（不需要求解）；经 Broadcast_struct_global_all 广播进 C 的全局",
+        "how": "输入参数（不需要求解）；经 Broadcast_struct_global_all 广播进 C 的全局。取值在恒星标度关系里定：低质端单幂律 F_STAR10 · (M/1e10)^ALPHA_STAR；高质端在 USE_UPPER_STELLAR_TURNOVER 开且 ALPHA_STAR > UPPER_STELLAR_TURNOVER_INDEX 时换成双幂律（转折 UPPER_STELLAR_TURNOVER_MASS，归一到 1e10 上取 1）；每个晕按对数正态散射抽一次（宽度 SIGMA_STAR，HALO_SCALING_RELATIONS_MEDIAN 决定参数给中值还是均值）；乘 exp(−M_turn/M) 后硬截断到 1。分子冷却支另走单幂律 (M/1e7)^ALPHA_STAR_MINI · F_STAR7_MINI，并多一条 exp(−M/M_crit,ACG) 的高质端压制",
         "when": "一次读入，不随循环变",
         "discretization": "—",
-        "where": "src/py21cmfast/wrapper/inputs.py（F_STAR10 / ALPHA_STAR）；广播在 InputParameters.c:11"
+        "where": "src/py21cmfast/wrapper/inputs.py（F_STAR10 / ALPHA_STAR / SIGMA_STAR / UPPER_STELLAR_TURNOVER_MASS / UPPER_STELLAR_TURNOVER_INDEX / M_TURN；F_STAR10 与 UPPER_STELLAR_TURNOVER_MASS 以 10 为底、SIGMA_STAR 以 dex 给出）；广播在 InputParameters.c:11；取值在 scaling_relations.c:311-361 get_halo_stellarmass"
       },
       "zeta": {
         "how": "输入参数（不需要求解）；同上广播进全局",
@@ -2399,12 +2917,6 @@
         "when": "一次读入",
         "discretization": "—",
         "where": "src/py21cmfast/wrapper/inputs.py（L_X）"
-      },
-      "k_target": {
-        "how": "分析侧自选的采样波数，不是模型参数（inputs.py 里没有它）",
-        "when": "分析时选定",
-        "discretization": "它本身就是分析层的离散化选择",
-        "where": "不在代码参数里（分析层）"
       },
       "tvir_min->mmin": {
         "how": "Eq.2：把维里温度换成质量下限",
@@ -2565,13 +3077,13 @@
       "dtb->p21": {
         "how": "Eq.11 里的 δT_b² 前置因子",
         "when": "分析层（对盒子做 k 空间统计）",
-        "discretization": "K_TARGET（分析侧）",
+        "discretization": "分析侧自选的采样波数",
         "where": "**代码不产出**（正面结论）：核心只给盒子与光锥，功率谱由分析层统计得到"
       },
       "q_hii->p21": {
         "how": "Eq.11 里经 P_xx 项（电离涨落）",
         "when": "分析层",
-        "discretization": "K_TARGET",
+        "discretization": "分析侧自选的采样波数",
         "where": "**代码不产出**（正面结论）：同 dtb->p21，功率谱属分析层"
       },
       "fstar->phi_uv": {
@@ -2650,7 +3162,7 @@
         "how": "扰动密度场在 k 空间乘方向分量（i·k_i/k²）得速度分量，按生长因子换算后写进 velocity_x / velocity_z",
         "when": "每个红移一次（与扰动密度场同一次调用）",
         "discretization": "低分辨网格 HII_DIM；PERTURB_ALGORITHM 决定位移方式",
-        "where": "src/py21cmfast/src/PerturbedField.c:280 compute_perturbed_velocities（写 velocity_x :466 / velocity_z :471）"
+        "where": "src/py21cmfast/src/PerturbedField.c:280 compute_perturbed_velocities（写 velocity_x :465 / velocity_y :467 / velocity_z :470）"
       },
       "filtered_sfr": {
         "how": "恒星形成率网格按 [R_inner, R_outer] 环壳滤波（one_annular_filter），逐红移切片累进 XraySourceBox.filtered_sfr",
@@ -2662,7 +3174,7 @@
         "how": "同一次环形滤波顺带算出的体积平均（fsfr_avg），逐红移赋给 mean_sfr，供恒星形成率密度的自洽修正项用",
         "when": "每个红移一次（与滤波场同一次调用）",
         "discretization": "同滤波场的半径分箱 N_STEP_TS / R_MAX_TS",
-        "where": "src/py21cmfast/src/SpinTemperatureBox.c:743 出 fsfr_avg，:769 写 source_box->mean_sfr"
+        "where": "src/py21cmfast/src/SpinTemperatureBox.c:762-764 出 fsfr_avg，:769 写 source_box->mean_sfr"
       },
       "gamma_12": {
         "how": "电离判据判定格点已电离时，把该处算得的电离光子率（单位 1e12 s⁻¹）写进 ionisation_rate_G12",
@@ -2671,7 +3183,7 @@
         "where": "src/py21cmfast/src/IonisationBox.c:1123（写 ionisation_rate_G12）"
       },
       "recomb": {
-        "how": "本轮复合量 dNrec 由复合系数（Case A / Case B 插值表）与时间步长相乘得到，再累加到上一红移的累积复合数上",
+        "how": "该红移步的复合量 dNrec 由复合系数（Case A / Case B 插值表）与时间步长相乘得到，再累加到上一红移的累积复合数上",
         "when": "每个红移一次，带跨红移记忆（累加量）",
         "discretization": "复合系数插值表的分辨率；时间步长由相邻快照的红移差定",
         "where": "src/py21cmfast/src/IonisationBox.c:1277 dNrec → :1291-1292 cumulative_recombinations"
@@ -2710,13 +3222,13 @@
         "how": "扰动密度场经 k 空间方向算子得速度分量",
         "when": "每个红移一次（密度写入之后紧接着算）",
         "discretization": "低分辨网格 HII_DIM",
-        "where": "src/py21cmfast/src/PerturbedField.c:455（写 density）→ :466/:471"
+        "where": "src/py21cmfast/src/PerturbedField.c:455（写 density）→ :465/:467/:470"
       },
       "filtered_sfr->mean_sfr": {
         "how": "同一次环形滤波给出滤波场与它的体积平均",
         "when": "每个红移一次",
         "discretization": "半径分箱 N_STEP_TS / R_MAX_TS",
-        "where": "src/py21cmfast/src/SpinTemperatureBox.c:743 → :769"
+        "where": "src/py21cmfast/src/SpinTemperatureBox.c:762-764 → :769"
       },
       "gamma_12->q_hii": {
         "how": "中性分数与电离光子率在同一段判据循环里算出（同一格点、同一半径）",
@@ -2745,7 +3257,7 @@
     }
   },
   "algorithmPending": {
-    "note": "尚无锚点的条目，显式列名（规则：不许静默留空）。2026-09-30 把当时的 28 个量（含 4 个盒子产物 matter_power / vcb / perturb_field / filtered_xray）与全部边补齐；五个过程块的成员展开后总数是 39 个量，新增的 11 个成员与 9 条块内关系的锚点同批带上，名单仍为空。以后新增节点/边若一时没有证据，往这里加，自检会盯着。",
+    "note": "尚无锚点的条目，显式列名（规则：不许静默留空）。2026-09-30 把当时的 28 个量（含 4 个盒子产物 matter_power / vcb / perturb_field / filtered_xray）与全部边补齐；五个过程块的成员展开后总数是 38 个量，新增的 11 个成员与 9 条块内关系的锚点同批带上，名单仍为空。以后新增节点/边若一时没有证据，往这里加，自检会盯着。",
     "nodes": [],
     "drivers": [],
     "edges": "none"
@@ -2767,5 +3279,580 @@
       "codeRef": "HaloBox.c:496（签名：HaloBox.c:563 的 ComputeHaloBox 收 previous_ionize_box）",
       "note": "Gamma12_val = previous_ionize_box->ionisation_rate_G12[i]、zre_val = previous_ionize_box->z_reion[i]，再 reionization_feedback(z, Gamma12_val, zre_val) 改写 M_turn_r。"
     }
-  ]
+  ],
+  "stepSites": {
+    "S12.1.1": [
+      {
+        "symbol": "set_scaling_constants",
+        "file": "src/py21cmfast/src/scaling_relations.c",
+        "line": 84,
+        "endLine": 101,
+        "needles": [
+          "lyman_werner_threshold",
+          "Mass_limit_bisection",
+          "Mlim_Fstar"
+        ],
+        "note": "按二分反解出本红移的 `Mlim_Fstar` / `Mlim_Fesc`（`Mass_limit_bisection`，锚在 `fstar_10` / `fesc_10` 上），并把 `M_TURN` 落成恒星形成下限 `mturn_a_nofb`；开 mini-halo 时另取 `mturn_m_nofb` 与两个 mini 下限。"
+      }
+    ],
+    "S14.6.3": [
+      {
+        "symbol": "xcoll_HI",
+        "file": "src/py21cmfast/src/heating_helper_progs.c",
+        "line": 679,
+        "endLine": 683,
+        "needles": [
+          "kappa_10",
+          "Trad",
+          "xcoll"
+        ],
+        "note": "氢原子的碰撞耦合系数 `x_c^HI`：中性氢数密度 `(1-xe) · nH · (1+z)^3 · (1+delta)` 乘 `kappa_10(TK)` 的自旋交换率，再乘 `T_21/Trad/A10` 化成无量纲的耦合。"
+      }
+    ],
+    "S14.7.1": [
+      {
+        "symbol": "alpha_A",
+        "file": "src/py21cmfast/src/thermochem.c",
+        "line": 67,
+        "endLine": 76,
+        "needles": [
+          "alpha_A",
+          "logT",
+          "ans"
+        ],
+        "note": "A 型复合系数 `alpha_A(T)`：Abel et al. 1997 的九阶多项式拟合，自变量是 `log(T/1.1605e4)`，单位 cm^3 s^-1。"
+      }
+    ],
+    "S12.1.2": [
+      {
+        "symbol": "lyman_werner_threshold",
+        "file": "src/py21cmfast/src/thermochem.c",
+        "line": 289,
+        "endLine": 299,
+        "needles": [
+          "mcrit_noLW",
+          "f_LW",
+          "f_vcb"
+        ],
+        "note": "以无反馈的 `mcrit_noLW = 3.314e7 · (1+z)^-1.5` 起算，乘 LW 反馈因子 `f_LW(J_21_LW)` 与相对速度因子 `f_vcb(v_cb)`，得该红移的原子冷却阈值（Schauer+20 对两者的联合拟合）。"
+      }
+    ],
+    "S12.2.1": [
+      {
+        "symbol": "ComputeHaloBox",
+        "file": "src/py21cmfast/src/HaloBox.c",
+        "line": 628,
+        "endLine": 645,
+        "needles": [
+          "sum_halos_onto_grid",
+          "set_fixed_grids",
+          "M_max_integral"
+        ],
+        "note": "源格子总装：`SOURCE_MODEL > 2` 时把离散星表铺上格；再按 `SOURCE_MODEL` 定亚星表积分上限 `M_max_integral`，交给 `set_fixed_grids` 把 `[M_min, M_max_integral]` 这一段积进 `grids`。"
+      }
+    ],
+    "S12.2.2": [
+      {
+        "symbol": "sum_halos_onto_grid",
+        "file": "src/py21cmfast/src/HaloBox.c",
+        "line": 547,
+        "endLine": 548,
+        "needles": [
+          "move_halo_galprops",
+          "out_dim",
+          "grids"
+        ],
+        "note": "逐个 halo 把恒星形成率与电离光子产量累加到它所在的格（`move_halo_galprops`），得 `halo_sfr` 与 `n_ion`；`INHOMO_RECO` 时另累一份 `whalo_sfr`。"
+      }
+    ],
+    "S12.2.3": [
+      {
+        "symbol": "set_fixed_grids",
+        "file": "src/py21cmfast/src/HaloBox.c",
+        "line": 398,
+        "endLine": 417,
+        "needles": [
+          "initialise_SFRD_Conditional_table",
+          "move_grid_galprops",
+          "integral_cond"
+        ],
+        "note": "按本格密度与质量分格建四张积分表——`SFRD`、含再电离反馈的 `Nion`、`dNdM`，以及开 `USE_TS_FLUCT` 时的 X 射线表——再用 `move_grid_galprops` 把整段质量区间的贡献铺到格上。"
+      }
+    ],
+    "S13.4.4": [
+      {
+        "symbol": "initialise_Nion_Conditional_spline",
+        "file": "src/py21cmfast/src/interp_tables.c",
+        "line": 380,
+        "endLine": 392,
+        "needles": [
+          "Nion_ConditionalM",
+          "table_2d->z_arr",
+          "table_mini->z_arr"
+        ]
+      }
+    ],
+    "S14.2.1": [
+      {
+        "symbol": "calculate_spectral_factors",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 416,
+        "endLine": 434,
+        "needles": [
+          "frecycle",
+          "spectral_emissivity",
+          "sum_lynto2_val"
+        ],
+        "note": "对 Lyman 级次 `n >= 3` 逐级累加 `frecycle(n)` 加权后的谱积分：高能级红移到 Ly-alpha 的那部分走 2->2、mini-halo 走 2->3；开 mini-halo 时另累红移到 `nu_LW` 阈以下的 LW 通量。"
+      }
+    ],
+    "S14.2.2": [
+      {
+        "symbol": "frecycle",
+        "file": "src/py21cmfast/src/heating_helper_progs.c",
+        "line": 200,
+        "endLine": 211,
+        "needles": [
+          "frecycle",
+          "case 2",
+          "0.2609"
+        ],
+        "note": "`Ly-n` 光子最终退化成 `Ly-alpha` 的回收分数：`n <= 2` 记 1、`n = 3` 记 0，更高能级查表（Pritchard & Furlanetto）。"
+      }
+    ],
+    "S14.2.3": [
+      {
+        "symbol": "spectral_emissivity",
+        "file": "src/py21cmfast/src/heating_helper_progs.c",
+        "line": 286,
+        "endLine": 300,
+        "needles": [
+          "nu_n",
+          "alpha_S_2",
+          "N0_2"
+        ],
+        "note": "把该星族（`Population`）的幂律谱 `N0 · nu^-alpha_S` 在相邻频率格 `[nu_n, nu_n+1]` 上积分，得这一段里的光子数密度；结果非正时压到 `1e-40`。"
+      }
+    ],
+    "S14.3.1": [
+      {
+        "symbol": "UpdateXraySourceBox",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 762,
+        "endLine": 776,
+        "needles": [
+          "one_annular_filter",
+          "mean_sfr",
+          "filtered_sfr"
+        ],
+        "note": "在每个滤波半径 `R_ct` 上对 `halo_sfr` 与 `halo_xray` 各做一次环状滤波（`one_annular_filter`），把该尺度的平均恒星形成率记进 `mean_sfr`；开 mini-halo 时连 `halo_sfr_mini` 一起滤，并记下 `mean_log10_Mcrit_LW`。"
+      }
+    ],
+    "S14.3.2": [
+      {
+        "symbol": "one_annular_filter",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 686,
+        "endLine": 710,
+        "needles": [
+          "dft_r2c_cube",
+          "filter_box",
+          "dft_c2r_cube"
+        ],
+        "note": "把源盒变换到 k 空间，按 `[R_inner, R_outer]` 这一环对应的尺度截断（`HII_DIM > 1` 才真滤），再变换回实空间——出来的就是该平均自由程下被平滑过的源。"
+      }
+    ],
+    "S14.3.3": [
+      {
+        "symbol": "global_reion_properties",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 961,
+        "endLine": 980,
+        "needles": [
+          "EvaluateNionTs",
+          "ION_EFF_FACTOR",
+          "Q_HI"
+        ],
+        "note": "取全宇宙平均电离光子数（`EvaluateNionTs`，开 mini-halo 时外加 `EvaluateNionTs_MINI`），乘由 `f_star`、`f_esc`、`N_ion` 组成的总电离效率，给出未做非均匀再电离时的 `Q_HI`。"
+      }
+    ],
+    "S14.3.4": [
+      {
+        "symbol": "initialise_SFRD_spline",
+        "file": "src/py21cmfast/src/interp_tables.c",
+        "line": 137,
+        "endLine": 152,
+        "needles": [
+          "Nion_General",
+          "SFRD_z_table",
+          "evolve_scaling_constants_to_redshift"
+        ],
+        "note": "沿红移网格逐点演化解锁常数（`evolve_scaling_constants_to_redshift`）、取该红移的最小源质量，用 `Nion_General` 把单位体积的光子产生率填进 `SFRD_z_table`；开 mini-halo 时另填 `SFRD_z_table_MINI`（每个 `mturn` 一列）。"
+      }
+    ],
+    "S14.3.5": [
+      {
+        "symbol": "calculate_sfrd_from_grid",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 1034,
+        "endLine": 1057,
+        "needles": [
+          "EvaluateSFRD_Conditional",
+          "sfrd_grid",
+          "curr_dens"
+        ],
+        "note": "逐格算共动 SFRD：`SOURCE_MODEL == 1` 走条件 SFRD（`EvaluateSFRD_Conditional`，mini-halo 用格自身的 `Mcrit`），`SOURCE_MODEL == 2` 走塌缩分数对红移的导数；同时累出全盒平均。"
+      }
+    ],
+    "S14.6.1": [
+      {
+        "symbol": "get_Ts",
+        "file": "src/py21cmfast/src/heating_helper_progs.c",
+        "line": 725,
+        "endLine": 741,
+        "needles": [
+          "xc",
+          "xa_tilde",
+          "TS"
+        ],
+        "note": "先取碰撞耦合 `xc`；有 Ly-alpha（`J_alpha > 1e-20`）时对 `TS = (1 + xa_tilde + xc) / (1/Trad + xa_tilde/Tceff + xc/TK)` 迭代到相对变化小于 `1e-3`，并把 `xa_tilde` 回传；否则只留碰撞项。"
+      }
+    ],
+    "S14.6.2": [
+      {
+        "symbol": "get_Ts_fast",
+        "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+        "line": 1337,
+        "endLine": 1356,
+        "needles": [
+          "TS_fast",
+          "xa_tilde_fast",
+          "xc_fast"
+        ],
+        "note": "同一方程的快速解：用 `xi = Trad/TK` 的多项式拟合代替 `Tceff` 与 `xa_tilde`，同样迭代到 `1e-3`；`J_alpha` 很小时退化为碰撞项的解析式。"
+      }
+    ],
+    "S14.7.2": [
+      {
+        "symbol": "interp_fheat",
+        "file": "src/py21cmfast/src/elec_interp.c",
+        "line": 149,
+        "endLine": 164,
+        "needles": [
+          "locate_energy_index",
+          "x_int_fheat",
+          "elow_result"
+        ],
+        "note": "在能量与电离度两个方向上做双线性插值：先在相邻能量格上各插一次，再按 `xHII` 在两条结果之间插值，得该 `(E, xHII)` 处的 X 射线加热分数 `f_heat`。"
+      }
+    ],
+    "S15.1.1": [
+      {
+        "symbol": "ComputeBrightnessTemp",
+        "file": "src/py21cmfast/src/BrightnessTemperatureBox.c",
+        "line": 72,
+        "endLine": 83,
+        "needles": [
+          "const_factor",
+          "spin_temperature",
+          "tau_21"
+        ],
+        "note": "逐格算 `dTb = const_factor · x_HI · (1+delta)`；开 `USE_TS_FLUCT` 时先把预因子折成光深 `tau_21`，再按 `(1-exp(-tau)) · 1000 · (TS-Trad)/(1+z)` 写回亮温，并累出全盒平均。"
+      }
+    ],
+    "S04.1.1": [
+      {
+        "symbol": "ComputeLF",
+        "file": "src/py21cmfast/src/LuminosityFunction.c",
+        "line": 186,
+        "endLine": 199,
+        "needles": [
+          "gsl_spline_eval",
+          "unconditional_hmf",
+          "log10phi"
+        ],
+        "note": "对每个质量格：用 `M_UV(M_h)` 的样条导数把质量函数换算到 `M_UV` 空间，乘 `M_TURN` 截断与占空比（原子冷却记 1、分子冷却记 `exp(-M/Mcrit_atom)`），得 `log10 phi`，低于 `-30` 截断。"
+      }
+    ],
+    "S04.2.1": [
+      {
+        "symbol": "ComputeTau",
+        "file": "src/py21cmfast/src/thermochem.c",
+        "line": 274,
+        "endLine": 276,
+        "needles": [
+          "ComputeTau",
+          "tau_e",
+          "z_re_HeII"
+        ],
+        "note": "把整条 `x_HI(z)` 与红移网格交给 `tau_e` 沿视线积分（含 HeII 再电离红移 `z_re_HeII`），得汤姆森光深。"
+      }
+    ],
+    "S01.2.2": [
+      {
+        "symbol": "from_template",
+        "file": "src/py21cmfast/wrapper/inputs.py",
+        "line": 1836,
+        "endLine": 1844,
+        "needles": [
+          "create_params_from_template",
+          "cosmo_tables",
+          "cls(**dct, **cls_kw)"
+        ]
+      }
+    ],
+    "S06.1.1": [
+      {
+        "symbol": "physconst",
+        "file": "src/py21cmfast/src/Constants.c",
+        "line": 16,
+        "endLine": 30,
+        "needles": [
+          ".s_per_yr",
+          ".cm_per_Mpc",
+          ".nu_ion_HI"
+        ]
+      }
+    ],
+    "S06.2.2": [
+      {
+        "symbol": "CosmoParams",
+        "file": "src/py21cmfast/src/_inputparams_wrapper.h",
+        "line": 8,
+        "endLine": 22,
+        "needles": [
+          "hlittle",
+          "POWER_INDEX",
+          "m22"
+        ]
+      }
+    ],
+    "S07.4.2": [
+      {
+        "symbol": "allocate_RGTable1D",
+        "file": "src/py21cmfast/src/interpolation.c",
+        "line": 15,
+        "endLine": 19,
+        "needles": [
+          "n_bin",
+          "y_arr",
+          "calloc"
+        ]
+      }
+    ],
+    "S08.1.2": [
+      {
+        "symbol": "IntegratedNdM_GL",
+        "file": "src/py21cmfast/src/hmf.c",
+        "line": 660,
+        "endLine": 668,
+        "needles": [
+          "GL_limit",
+          "wi_GL",
+          "xi_GL"
+        ]
+      }
+    ],
+    "S08.1.3": [
+      {
+        "symbol": "FgtrM",
+        "file": "src/py21cmfast/src/hmf.c",
+        "line": 858,
+        "endLine": 865,
+        "needles": [
+          "delta_c_sph",
+          "sigma_z0",
+          "splined_erfc"
+        ]
+      }
+    ],
+    "S16.3.1": [
+      {
+        "symbol": "allocate_RGTable2D",
+        "file": "src/py21cmfast/src/interpolation.c",
+        "line": 41,
+        "endLine": 51,
+        "needles": [
+          "nx_bin",
+          "z_arr",
+          "calloc"
+        ]
+      }
+    ],
+    "S16.4.1": [
+      {
+        "symbol": "writeSimulationOptions",
+        "file": "src/py21cmfast/src/debugging.c",
+        "line": 57,
+        "endLine": 71,
+        "needles": [
+          "LOG_INFO",
+          "SimulationOptions",
+          "HII_DIM"
+        ]
+      }
+    ],
+    "S16.4.2": [
+      {
+        "symbol": "SomethingThatCatches",
+        "file": "src/py21cmfast/src/debugging.c",
+        "line": 26,
+        "endLine": 37,
+        "needles": [
+          "Try",
+          "Catch",
+          "PhotonConsError"
+        ]
+      }
+    ]
+  },
+  "docText": {
+    "block:const": {
+      "formula": ""
+    },
+    "tgamma": {
+      "formula": "T_\\gamma(z) = T_0\\,(1+z),\\qquad T_0 = 2.7255\\ \\mathrm{K}"
+    },
+    "block:cosmo": {
+      "formula": ""
+    },
+    "matter_power": {
+      "formula": "P_m(k)=\\frac{\\sigma_{\\rm norm}}{k^{3}}\\,\\mathcal{P}_\\zeta(k)\\,T^{2}(k),\\qquad \\Delta^{2}(k)=\\frac{k^{3}}{2\\pi^{2}}P_m(k)"
+    },
+    "transfer_fn": {
+      "formula": "T(k)=\\frac{\\ln(1+2.34q)}{2.34q}\\left[1+3.89q+(16.1q)^{2}+(5.46q)^{3}+(6.71q)^{4}\\right]^{-1/4},\\qquad q=\\frac{k}{\\Gamma\\,h\\ \\mathrm{Mpc}^{-1}}"
+    },
+    "block:initial": {
+      "formula": ""
+    },
+    "vcb": {
+      "formula": "\\mathbf v_{cb}(\\mathbf x)=\\mathbf v_c(\\mathbf x)-\\mathbf v_b(\\mathbf x)"
+    },
+    "initial_density": {
+      "formula": "\\delta_i(\\mathbf x)=D(z_i)\\,\\delta(\\mathbf x),\\qquad \\langle\\delta_{\\mathbf k}\\delta^{*}_{\\mathbf k^{\\prime}}\\rangle=V\\,P(k)\\,\\delta_{\\mathbf k\\mathbf k^{\\prime}}"
+    },
+    "zeldovich_velocity": {
+      "formula": "\\mathbf v_{1\\mathrm{LPT}}=-f(z)\\,H(z)\\,D(z)\\,\\nabla\\nabla^{-2}\\delta"
+    },
+    "second_order_velocity": {
+      "formula": "\\nabla^{2}\\phi_2=\\sum_{i>j}\\left[(\\partial_i^{2}\\phi_1)(\\partial_j^{2}\\phi_1)-(\\partial_i\\partial_j\\phi_1)^{2}\\right],\\qquad \\mathbf v_{2\\mathrm{LPT}}=-\\tfrac{3}{7}D^{2}\\,\\nabla\\!\\left(\\nabla^{-2}\\mu_2\\right)"
+    },
+    "block:grav": {
+      "formula": ""
+    },
+    "perturb_field": {
+      "formula": "\\delta(\\mathbf x,z)=\\frac{D(z)}{D(z_i)}\\,\\delta_{\\rm hi}(\\mathbf x)\\ \\ast\\ W_{\\rm cell},\\qquad 1+\\delta\\ge 0"
+    },
+    "perturb_velocity": {
+      "formula": "\\mathbf v_{\\mathbf k}=i\\,\\frac{\\mathbf k}{k^{2}}\\,\\frac{\\dot D}{D}\\,\\delta_{\\mathbf k},\\qquad \\mathbf v=\\frac{\\dot D}{D}\\,\\nabla\\nabla^{-2}\\delta"
+    },
+    "block:halocat": {
+      "formula": ""
+    },
+    "hmf_impl": {
+      "formula": "\\nu f(\\nu)=A\\sqrt{\\frac{2a\\nu}{\\pi}}\\left[1+(a\\nu)^{-p}\\right]e^{-a\\nu/2}"
+    },
+    "dn_dm": {
+      "formula": "\\frac{\\mathrm dn}{\\mathrm dM}=\\frac{\\rho_m}{M}\\,\\nu f(\\nu)\\,\\frac{\\mathrm d\\ln\\nu}{\\mathrm d\\ln M},\\qquad \\nu=\\frac{\\delta_c^{2}(z)}{\\sigma^{2}(M)}"
+    },
+    "mmin": {
+      "formula": "M_{\\min}(z)=10^{8}M_\\odot\\left(\\frac{T_{\\rm vir}^{\\min}}{1.98\\times10^{4}\\ \\mathrm K}\\right)^{3/2}\\left(\\frac{1+z}{10}\\right)^{-3/2}\\left(\\frac{\\mu}{0.6}\\right)^{-3/2}"
+    },
+    "tvir_min": {
+      "formula": "T_{\\rm vir}=\\frac{\\mu m_p}{2k_B}\\frac{GM}{R_{\\rm vir}},\\qquad R_{\\rm vir}=\\left(\\frac{3M}{4\\pi\\Delta_c\\rho_m(z)}\\right)^{1/3}"
+    },
+    "block:galaxy": {
+      "formula": ""
+    },
+    "scaling_relations": {
+      "formula": "M_\\star=\\frac{\\Omega_b}{\\Omega_m}\\,f_\\star M,\\qquad \\dot M_\\star=\\frac{M_\\star}{t_\\star\\,t_H(z)}"
+    },
+    "rho_star": {
+      "formula": "\\dot\\rho_\\star(z)=\\int_{M_{\\min}(z)}^{\\infty}\\frac{\\mathrm dn}{\\mathrm dM}\\,\\dot M_\\star(M,z)\\,\\mathrm dM"
+    },
+    "phi_uv": {
+      "formula": "\\phi(M_{1500},z)=\\left|\\frac{{\\rm d}M_{1500}}{{\\rm d}M_h}\\right|^{-1}\\,\\frac{{\\rm d}n}{{\\rm d}M_h}\\,\\exp\\!\\left(-\\frac{M_{\\rm turn}}{M_h}\\right)f_{\\rm duty}"
+    },
+    "fstar": {
+      "formula": "f_\\star=f_{\\star,10}\\,\\frac{\\left(\\frac{M_{\\rm up}}{10^{10}M_\\odot}\\right)^{\\alpha_\\star}+\\left(\\frac{M_{\\rm up}}{10^{10}M_\\odot}\\right)^{\\alpha_{\\rm up}}}{\\left(\\frac{M}{M_{\\rm up}}\\right)^{-\\alpha_\\star}+\\left(\\frac{M}{M_{\\rm up}}\\right)^{-\\alpha_{\\rm up}}}\\exp\\!\\left(-\\frac{M_{\\rm turn}}{M}+s\\,\\sigma_\\star-\\frac{\\sigma_\\star^2}{2}\\right)\\le 1"
+    },
+    "lx": {
+      "formula": "L_X=\\left(\\frac{L_X}{\\rm SFR}\\right)(Z)\\,\\dot M_\\star"
+    },
+    "block:halobox": {
+      "formula": ""
+    },
+    "source_grid": {
+      "formula": "f_{\\rm coll}(\\rho)=\\frac{1}{\\rho_m}\\int_{M_{\\min}}^{M_{\\rm cell}(\\rho)}\\mathrm dM\\,M\\,\\frac{\\mathrm dn}{\\mathrm dM}"
+    },
+    "nion": {
+      "formula": "\\dot n_{\\rm ion}(z)=f_{\\rm esc}N_{\\rm ion}\\,\\dot\\rho_\\star(z)"
+    },
+    "zeta": {
+      "formula": "\\zeta=f_\\star\\,f_{\\rm esc}N_{\\rm ion}"
+    },
+    "block:xray": {
+      "formula": ""
+    },
+    "filtered_xray": {
+      "formula": "\\varepsilon_X(\\mathbf x,z)=\\int_{z}^{z_{\\max}}\\mathrm dz^{\\prime}\\frac{\\mathrm dt}{\\mathrm dz^{\\prime}}\\int_{\\nu_{\\min}}^{\\nu_{\\max}}\\mathrm d\\nu\\,(\\nu-\\nu_{\\rm th})\\,\\frac{L_\\nu}{4\\pi r^{2}}\\,e^{-\\tau(\\nu)}"
+    },
+    "filtered_sfr": {
+      "formula": "\\bar{\\dot\\rho}_\\star(R,\\mathbf x)=\\frac{1}{V_{\\rm shell}}\\int_{R_{\\rm in}}^{R_{\\rm out}}\\dot\\rho_\\star(\\mathbf x^{\\prime})\\,\\mathrm d^{3}x^{\\prime}"
+    },
+    "mean_sfr": {
+      "formula": "\\langle\\dot\\rho_\\star\\rangle(z)=\\frac{1}{V}\\int_V \\dot\\rho_\\star(\\mathbf x)\\,\\mathrm d^{3}x"
+    },
+    "block:thermal": {
+      "formula": ""
+    },
+    "eps_heat": {
+      "formula": "\\varepsilon_{\\rm heat}(z)=(1-x_e)\\,\\frac{L_X}{E_X}\\,\\bar n_{\\rm H}\\int_{z}^{\\infty}\\mathrm dz^{\\prime}\\,\\frac{(1+z^{\\prime})^{3}}{H(z^{\\prime})}\\,e^{-\\tau_X(z,z^{\\prime})}"
+    },
+    "tk": {
+      "formula": "\\frac{\\mathrm dT_K}{\\mathrm dt}=-2HT_K+\\frac{2}{3}\\frac{\\varepsilon_{\\rm heat}}{k_B\\,n_{\\rm tot}}+\\Gamma_{\\rm Compton}\\,(T_\\gamma-T_K)"
+    },
+    "jalpha": {
+      "formula": "J_\\alpha(z)=\\frac{c}{4\\pi}\\int_{z}^{\\infty}\\frac{\\mathrm dz^{\\prime}}{H(z^{\\prime})(1+z^{\\prime})}\\sum_{n\\ge 2}f_{\\rm recycle}(n)\\,\\epsilon_{n}(z^{\\prime})"
+    },
+    "xalpha": {
+      "formula": "x_\\alpha=\\frac{16\\pi^{2}\\,T_\\star\\,f_{12}}{27\\,A_{10}\\,T_\\gamma}\\,S_\\alpha\\,J_\\alpha(z)"
+    },
+    "xc": {
+      "formula": "x_c=\\frac{T_{21}}{T_\\gamma}\\,\\frac{n_{\\rm HI}\\kappa_{\\rm HI}+n_e\\kappa_e+n_p\\kappa_p}{A_{10}}"
+    },
+    "ts": {
+      "formula": "T_S^{-1}=\\frac{T_\\gamma^{-1}+x_\\alpha\\,T_\\alpha^{-1}+x_c\\,T_K^{-1}}{1+x_\\alpha+x_c}"
+    },
+    "block:ionization": {
+      "formula": ""
+    },
+    "q_hii": {
+      "formula": "\\frac{\\mathrm dQ_{\\rm HII}}{\\mathrm dt}=\\frac{\\dot n_{\\rm ion}}{\\bar n_{\\rm H}}-\\alpha_B\\,C\\,\\bar n_{\\rm H}\\,Q_{\\rm HII}\\,(1+z)^{3}"
+    },
+    "gamma_12": {
+      "formula": "\\Gamma_{12}(\\mathbf x)=\\frac{1}{10^{-12}\\ \\mathrm{s^{-1}}}\\int_{\\nu_{\\rm th}}^{\\infty}\\mathrm d\\nu\\,\\frac{\\sigma_{\\rm HI}(\\nu)\\,F_\\nu(\\mathbf x)}{h\\nu}"
+    },
+    "recomb": {
+      "formula": "N_{\\rm rec}(\\mathbf x)=\\sum_{z}\\alpha_B\\,C\\,n_{\\rm H}(\\mathbf x)\\,(1+z)^{3}\\,x_{\\rm HII}(\\mathbf x)\\,\\Delta t"
+    },
+    "mfp": {
+      "formula": "\\zeta\\,f_{\\rm coll}(\\mathbf x,R_{\\rm mfp})=1"
+    },
+    "z_reion": {
+      "formula": "z_{\\rm reion}(\\mathbf x)=\\max\\left\\{\\,z\\;\\middle|\\;\\zeta\\,f_{\\rm coll}(\\mathbf x,z)\\ge 1\\,\\right\\}"
+    },
+    "block:obs": {
+      "formula": ""
+    },
+    "dtb": {
+      "formula": "\\delta T_b(z)=27\\,x_{\\rm HI}(z)\\left(1-\\frac{T_\\gamma}{T_S}\\right)\\left(\\frac{1+z}{10}\\right)^{1/2}\\frac{\\Omega_b h^{2}}{0.023}\\left(\\frac{0.15}{\\Omega_m h^{2}}\\right)^{1/2}\\ \\mathrm{mK}"
+    },
+    "p21": {
+      "formula": "\\Delta^{2}_{21}(k,z)=\\frac{k^{3}}{2\\pi^{2}}P_{21}(k,z),\\qquad P_{21}=\\delta T_b^{2}\\left[\\mu^{4}P_{\\delta\\delta}+2\\mu^{2}P_{\\delta x}+P_{xx}\\right]"
+    },
+    "tau_e": {
+      "formula": "\\tau_e=\\sigma_T\\,\\bar n_{\\rm H,0}\\,c\\int_{0}^{\\infty}\\mathrm dz\\,\\frac{(1-Q_{\\rm HII})\\,(1+z)^{2}}{H(z)}"
+    }
+  }
 }

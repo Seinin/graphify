@@ -1,7 +1,8 @@
 /**
  * 标签的两处**判据**（纯 TS，不 import React）：
  *   · `canEditNodeTags` —— 谁能增删标签；
- *   · `inheritedTagsOf` / `tagDisplayOf` —— 有子图者显示的标签从哪来（子树叶子并集，现算）。
+ *   · `inheritedTagsOf` / `tagDisplayOf` —— 有子图者显示的标签从哪来（子树叶子并集，现算）；
+ *   · `bucketByGroup` —— 按类别分桶的顺序（顶栏标签弹层与右侧属性面板同一份）。
  *
  * 为什么单独一个文件：这两条判据要同时被组件（`components/NodeTags.tsx`、`Inspector.tsx`、
  * 画布渲染器）与自检（`scripts/check-tags.mjs`，用 esbuild 直接在 Node 下加载 TS）读到——
@@ -116,4 +117,24 @@ export function tagDisplayOf(nodes: readonly GraphNode[] | undefined, node: Grap
   if (!nodes || node.type === 'group') return own
   const hasChild = nodes.some((candidate) => candidate.parent === node.id && candidate.id !== node.id)
   return hasChild ? inheritedTagsOf(nodes, node.id) : own
+}
+
+/**
+ * 按 `group` 分桶：桶的顺序取**首次出现**，空分类（没写 `group`）排在最后。
+ *
+ * 顶栏的标签弹层与右侧属性面板都按这个顺序铺分组标题（`tagGroupLabel` 给组名上人话），
+ * 两处各写一遍必然漂——所以口径只留这一份。
+ */
+export function bucketByGroup<T>(
+  items: readonly T[],
+  groupOf: (item: T) => string | undefined,
+): Array<[string, T[]]> {
+  const buckets = new Map<string, T[]>()
+  items.forEach((item) => {
+    const key = (groupOf(item) ?? '').trim()
+    const list = buckets.get(key)
+    if (list) list.push(item)
+    else buckets.set(key, [item])
+  })
+  return [...buckets.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : 0))
 }

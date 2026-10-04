@@ -14,9 +14,12 @@
  * 三份输入：真源（物理量/公式/依赖） + `wrapper/inputs.py`（参数默认值与校验） + atlas L3（代码落点）。
  *
  * 用法：
- *   node scripts/build-physics-chain.mjs             # 写产物
- *   node scripts/build-physics-chain.mjs --dry-run   # 只打印统计
- *   node scripts/build-physics-chain.mjs --stdout    # JSON 到 stdout（自检用）
+ *   node scripts/build-physics-chain.mjs            # 写产物
+ *   node scripts/build-physics-chain.mjs --dry-run  # 只打印统计
+ *   node scripts/build-physics-chain.mjs --stdout   # JSON 到 stdout（自检用）
+ *
+ * **模块文档不由本脚本产**：`docs/notes/physics-chain/modules/**` 是手写 md，站点按 `docId`
+ * 直接渲染；本脚本只给它们提供引用入口（`docPathOf` 算出的 `docId` + 锚点）。
  */
 
 import fs from 'node:fs/promises'
@@ -29,7 +32,7 @@ import { parseInputStructs } from './lib/pyInputs.mjs'
  * 方框尺寸与间距的**唯一口径**（`GAP` + 按标签算宽高）。画布用同一套数：
  * 坐标必须长在尺寸上，不许自己编一个"框有多大"（见下面排版那段的说明）。
  */
-import { GAP, measureBoxSize, stackCenters } from './lib/boxSize.mjs'
+import { BADGE_LINE, FRAME_PADDING, GAP, measureBoxSize, stackCenters } from './lib/boxSize.mjs'
 /**
  * 代码阶段的**残余用途**（判据就地写在这里，不再单开一份名单文件）。
  *
@@ -41,11 +44,11 @@ import { GAP, measureBoxSize, stackCenters } from './lib/boxSize.mjs'
  */
 const IMPL_TOPIC_ID = 'topic:impl'
 const BYPASS_TOPIC_ID = 'topic:bypass'
-/** 旁路 / 诊断出口的代码阶段：只用来打话题与身份标签，**不决定分层** */
+/** 旁路 / 诊断出口的代码阶段：只用来打话题，**不决定分层** */
 const BYPASS_STAGE = 'S04'
 /** `codeHints`（如 `['S14.2']`）→ 阶段号（`S14`）；驱动量没有 hint，给空串 */
 const stageOfHint = (hints) => String((Array.isArray(hints) ? hints[0] : hints) ?? '').split('.')[0]
-/** 落在这个阶段里的量是诊断出口（算完顺手给出的），不在主链上 —— 与图上 `tag:旁路出口` 同源 */
+/** 落在这个阶段里的量是诊断出口（算完顺手给出的），不在主链上 —— 与图上 `topic:bypass` 同源 */
 const isBypassHint = (hints) => stageOfHint(hints) === BYPASS_STAGE
 
 /**
@@ -70,23 +73,38 @@ const INPUTS_FILE = path.join(REPO_ROOT, 'src', 'py21cmfast', 'wrapper', 'inputs
 const args = process.argv.slice(2)
 const flag = (name) => args.includes(`--${name}`)
 /** `--stdout` 时统计走 stderr，保证 stdout 只有纯 JSON（自检要逐字比对） */
-const say = flag('stdout') ? (...parts) => console.error(...parts) : (...parts) => console.log(...parts)
-
-/** 每个物理量最多列几个代码落点（真源里的 codeHints 是"去哪些阶段找"，不是精确函数） */
-const MAX_SITES = 8
+const toStderr = flag('stdout')
+const say = toStderr ? (...parts) => console.error(...parts) : (...parts) => console.log(...parts)
 
 /**
- * 代码落点：按 atlas L3 的「承担者」取函数体行区间（与画布口径一致：C 按花括号、Python 按缩进）。
- * 返回 `stageCode → [{unit, symbol, file, line, endLine, fileWide}]`
+ * 落点不再限条数、不限跨度：真源核定的落点**逐条全给**，一条可以覆盖整个函数体、甚至整份文件。
+ * 旧口径「每个物理量至多两条、单条不超过 60 行、整个函数体不进文档」已废除——它把模块文档的工程节
+ * 压成一句话：文档要讲清"这个量怎么算出来"，就得能引用它经过的整段代码，而不是几行核心片段。
  */
-async function buildCodeSites(paramNames) {
+
+/**
+ * 代码落点（**回落路线**）：按 atlas L3 的「承担者」取函数体行区间（与画布口径一致：C 按花括号、Python 按缩进）。
+ * 返回 `stageCode → [{unit, symbol, file, line, endLine, fileWide}]`。
+ *
+ * 口径：真源的 `codeSites` 是落点的**出处**（见 `withSites`），这条路只在真源没给时兜底。
+ * 兜底找不到函数体（承担者写成"各函数""函数组"，或符号名对不上）时**不再**把 `1-文件末行` 当落点——
+ * 那既不是核心行，也让"这个量算在哪几行"变成空话；改为挂一条 `pending`（`line: null`），
+ * 折进 `code.pending` 并由生成日志与自检报出来（待补，不许静默）。
+ */
+async function buildCodeSites(paramNames, stepSites = {}) {
   const { subprocesses, units } = await loadAtlas()
   const subprocessByAnchor = new Map(subprocesses.filter((entry) => isSubprocessCode(entry.code)).map((entry) => [entry.anchor, entry]))
   const sourceCache = new Map()
+  /** 读源码（带缓存）：核定过的落点可能落在单元所属文件之外，按落点自己的文件取 */
+  const cachedSource = (file, language) => {
+    const absolute = path.join(REPO_ROOT, file)
+    if (!sourceCache.has(absolute)) sourceCache.set(absolute, readSource(absolute, language).catch(() => null))
+    return sourceCache.get(absolute)
+  }
   const byStage = new Map()
   /** hint（阶段或子过程）→ 在这个单元里被读到的参数名 */
   const paramHints = new Map()
-  const stats = { units: 0, located: 0, fileWide: 0, missed: [] }
+  const stats = { units: 0, located: 0, pending: [], missed: [] }
 
   for (const unit of units.filter((entry) => isUnitCode(entry.code))) {
     const subprocess = subprocessByAnchor.get(docTargetOf(unit.fields['所属子过程'])?.anchor ?? '')
@@ -96,10 +114,8 @@ async function buildCodeSites(paramNames) {
     if (!file) continue
     stats.units += 1
 
-    const absolute = path.join(REPO_ROOT, file)
     const language = file.endsWith('.py') ? 'python' : 'c'
-    if (!sourceCache.has(absolute)) sourceCache.set(absolute, readSource(absolute, language).catch(() => null))
-    const source = await sourceCache.get(absolute)
+    const source = await cachedSource(file, language)
     if (!source) {
       stats.missed.push(`${unit.code}（读不到 ${file}）`)
       continue
@@ -108,14 +124,33 @@ async function buildCodeSites(paramNames) {
     const carrier = unit.fields['承担者']?.raw ?? ''
     const symbols = codeSpans(carrier).filter((item) => !/\.(c|h|py)$/.test(item))
     const bodies = symbols.flatMap((symbol) => findSymbolBodies(source.maskedLines.join('\n'), symbol, language))
-    const fileWide = bodies.length === 0 || /各函数|等函数|函数组/.test(carrier)
-    const sites = fileWide
-      ? [{ symbol: symbols.join('、'), line: 1, endLine: source.lines.length, fileWide: true }]
-      : bodies.map((body) => ({ symbol: symbols.join('、'), line: body.startLine, endLine: body.endLine, fileWide: false }))
-    if (fileWide) stats.fileWide += 1
-    else stats.located += 1
+    const unresolved = bodies.length === 0 || /各函数|等函数|函数组/.test(carrier)
+    /**
+     * 这个单元的核心行在真源里核定过（`stepSites`，键是单元码）就以它为准：atlas 的「承担者」
+     * 只给到函数体，而"这一步到底算在哪几行"要读源码才能定。核不出来的单元照旧挂 `pending`。
+     */
+    const declared = stepSites[unit.code] ?? []
+    const sites = declared.length
+      ? declared.map((site) => ({ ...site, fileWide: false, source: 'chain' }))
+      : unresolved
+        ? [{ symbol: symbols.join('、'), line: null, endLine: null, fileWide: false, pending: true }]
+        : bodies.map((body) => ({ symbol: symbols.join('、'), line: body.startLine, endLine: body.endLine, fileWide: false }))
+    if (declared.length || !unresolved) stats.located += 1
+    else stats.pending.push({ unit: unit.code, file })
 
-    const entries = sites.map((site) => ({ ...site, unit: unit.code, unitName: unit.name, file }))
+    const entries = sites.map((site) => ({ ...site, unit: unit.code, unitName: unit.name, file: site.file ?? file }))
+    /**
+     * 参数归属的扫描窗口 = **核定的核心行 ∪ 单元函数体**（落点口径不受此影响，`entries` 照旧）。
+     * 只认核定行会漏：核定的常常只是主干那几行（`scaling_relations.c` 记的是 84-101，
+     * 而同一个函数在 46-65 就已在读参数）；「承担者」写成「…与各函数」这类泛指时，
+     * 函数体照样解析得出来，窗口也不因此作废。整文件落点（`fileWide`）仍不参与——范围太宽。
+     */
+    const scanWindows = [...entries, ...bodies.map((body) => ({ file, line: body.startLine, endLine: body.endLine }))]
+      .filter((window) => window.line && !window.fileWide)
+      .filter(
+        (window, index, all) =>
+          all.findIndex((item) => item.file === window.file && item.line === window.line && item.endLine === window.endLine) === index,
+      )
     /**
      * 落点挂**三个**键：阶段（`S12`）、子过程（`S12.1`）、计算单元（`S12.1.1`）。
      * 真源的 `codeHints` 写哪个粒度都能对上，越细越准：单元级 = 「源码」标签页恰好落在那一个函数上，
@@ -129,16 +164,27 @@ async function buildCodeSites(paramNames) {
     }
 
     /*
-      参数归属（后端查表：参数 × 节点）：在这个单元的**函数体**里找参数读取，认 `->NAME` / `.NAME`
-      这两种写法——代码里就是 `astro_params_global->F_STAR10`、`self.F_STAR10`。
-      整文件落点（fileWide）不参与：范围太宽，会把不相关的参数一起算进来。
+      参数归属（后端查表：参数 × 节点）：在扫描窗口里找参数读取，认三种写法——
+      `->NAME`（`astro_params_global->F_STAR10`）、`.NAME`（`self.F_STAR10`）、
+      以及 **Python 窗口里的引号字面量** `"NAME"` / `'NAME'`：`CosmoParams` 的私有字段在做功率谱那段
+      是按字符串键取的（`classy_output.get_current_derived_parameters(["A_s"])["A_s"]` ——
+      `A_s` 与 `sigma_8` 二选一的判定也走字符串键），只认属性写法就会漏掉它。
+      C 侧不加这一条：那里参数一律走 `->NAME`，引号字面量在 C 里是日志/文件名字符串，不是读取。
       这只是"出现在这个函数体里"，不等于"这个参数改变了这一步"——够用且可核对，不做更玄的推断。
     */
-    if (!fileWide && paramNames.length) {
-      for (const site of sites) {
-        const body = source.lines.slice(site.line - 1, site.endLine ?? site.line).join('\n')
+    if (paramNames.length) {
+      for (const window of scanWindows) {
+        /** 核定过的单元可能落在另一个文件里（`xcoll_HI` 在 `heating_helper_progs.c` 而单元挂 `thermochem.c`）：按窗口自己的文件切 */
+        const windowFile = window.file ?? file
+        const windowIsPython = windowFile.endsWith('.py')
+        const windowSource = windowFile === file ? source : await cachedSource(windowFile, windowIsPython ? 'python' : 'c')
+        if (!windowSource) continue
+        const body = windowSource.lines.slice(window.line - 1, window.endLine ?? window.line).join('\n')
         for (const name of paramNames) {
-          if (!body.includes(`->${name}`) && !body.includes(`.${name}`)) continue
+          const read = windowIsPython
+            ? body.includes(`->${name}`) || body.includes(`.${name}`) || body.includes(`"${name}"`) || body.includes(`'${name}'`)
+            : body.includes(`->${name}`) || body.includes(`.${name}`)
+          if (!read) continue
           for (const key of new Set([stageCode, subprocess.code])) {
             if (!paramHints.has(key)) paramHints.set(key, new Set())
             paramHints.get(key).add(name)
@@ -165,12 +211,13 @@ function assertShape(artifact) {
       problems.push(`节点 ${node.id} 缺出处（论文等式 eq 或代码锚 codeRef，至少一条）`)
     }
     if (!node.nature?.type) problems.push(`节点 ${node.id} 缺数学性质`)
-    // 分层纪律（README 第一节）：表面只放物理，工程实现进子图；子图节点必须写明挂在哪条公式/过程下面
-    if (node.layer !== undefined && !['surface', 'subgraph'].includes(node.layer)) {
-      problems.push(`节点 ${node.id} 的 layer 取值非法：${node.layer}`)
-    }
-    if (node.layer === 'subgraph' && !node.parent) {
-      problems.push(`子图节点 ${node.id} 没写父节点（它挂在哪个物理量/过程的下面）`)
+    /**
+     * 分层纪律（README 第一节）：图上只有一级（块）与二级（成员），**最底层就是物理量与物理过程**——
+     * 函数那一级不上图。`layer` 于是只剩一个合法取值，留着只为让旧数据里的第二级当场报出来，
+     * 而不是被静默忽略。
+     */
+    if (node.layer !== undefined && node.layer !== 'surface') {
+      problems.push(`节点 ${node.id} 的 layer 取值非法：${node.layer}（函数那一级已不上图，只有 surface）`)
     }
     // 种类（颜色按它分）：物理量 / 谱 / 函数 / 过程 / 工程项。
     // 注意：种类与"层级"（layer：表面/子图）是两件事——子图里可以是更细的物理，也可以是工程项。
@@ -185,35 +232,12 @@ function assertShape(artifact) {
     }
   }
   /**
-   * 骨干树 + 跨层分类的结构不变量（深查在 `check-physics-chain.mjs`，这里只拦"漏标/写反"）：
-   *   · 每条边都要有层差，且层差 ≥1（箭头永远自上而下，不存在回指）；
-   *   · 骨干边的层差必须 = 1 —— 这就是"骨干是一棵真正的多叉树、结构上不跨层"的可证伪断言；
-   *   · 非骨干边必须有成因；层差 1 只能标 `sibling`，层差 >1 不能标 `sibling`。
+   * **边的结构不变量**（深查在 `check-physics-chain.mjs`，这里只拦"漏出处"）：
+   *   · 回流边（`kind: 'feedback'`）必须有代码出处；
+   *   · 量 → 量的依赖边走块内直连（不标 `focusOnly`）。
    */
-  const SPAN_KINDS = ['sibling', 'coarse', 'bypass', 'gap', 'feedback']
   for (const edge of artifact.graph?.edges ?? []) {
-    /**
-     * **反馈边（跨红移回流）反向**：它在签名里由 `previous_*` 决定（`ComputeHaloBox` 收上一个红移的
-     * TsBox / IonizedBox），所以层差必须是负数，且不受"箭头永远自上而下"那条约束。它必须有代码出处。
-     */
-    if (edge.spanKind === 'feedback') {
-      if (!Number.isInteger(edge.levelSpan) || edge.levelSpan >= 0) {
-        problems.push(`反馈边 ${edge.id} 的层差异常：${edge.levelSpan}（回流必须为负）`)
-      }
-      if (!edge.codeRef) problems.push(`反馈边 ${edge.id} 缺代码出处 codeRef`)
-      continue
-    }
-    if (!Number.isInteger(edge.levelSpan) || edge.levelSpan < 1) {
-      problems.push(`边 ${edge.id} 的层差异常：${edge.levelSpan}`)
-      continue
-    }
-    if (edge.backbone) {
-      if (edge.levelSpan !== 1) problems.push(`骨干边 ${edge.id} 跨了 ${edge.levelSpan} 层（骨干必须层差 1）`)
-      continue
-    }
-    if (!SPAN_KINDS.includes(edge.spanKind)) problems.push(`交叉边 ${edge.id} 缺成因分类：${edge.spanKind}`)
-    if (edge.levelSpan === 1 && edge.spanKind !== 'sibling') problems.push(`层差 1 的交叉边 ${edge.id} 应标 sibling，实为 ${edge.spanKind}`)
-    if (edge.levelSpan > 1 && edge.spanKind === 'sibling') problems.push(`跨 ${edge.levelSpan} 层的边 ${edge.id} 不能标 sibling`)
+    if (edge.kind === 'feedback' && !edge.codeRef) problems.push(`反馈边 ${edge.id} 缺代码出处 codeRef`)
   }
   /**
    * **左栏第二个检索面（天体物理过程）**：真源 `processes` 的形状。这里只拦"整段漏了 / 成员写成空 /
@@ -224,9 +248,6 @@ function assertShape(artifact) {
   } else {
     for (const item of artifact.processes.items) {
       if (!item.id || !item.label) problems.push(`过程 ${item.id ?? '(无 id)'} 缺 id 或 label`)
-      if (!['process', 'band'].includes(item.kind)) {
-        problems.push(`过程 ${item.id} 的 kind 不在册：${item.kind}（应为 process / band）`)
-      }
       if (!item.members?.length) problems.push(`过程 ${item.id} 没有成员`)
       for (const member of item.members ?? []) {
         if (!ids.has(member)) problems.push(`过程 ${item.id} 的成员 ${member} 不是图上的量`)
@@ -235,21 +256,6 @@ function assertShape(artifact) {
     for (const member of artifact.processes.uncovered?.members ?? []) {
       if (!ids.has(member)) problems.push(`兜底名单里的 ${member} 不是图上的量`)
     }
-  }
-  const crossLevel = artifact.graph?.crossLevel
-  if (!crossLevel) problems.push('缺 crossLevel 段（骨干树 + 跨层成因的分类）')
-  else {
-    const listed = [
-      ...crossLevel.backbone,
-      ...crossLevel.sibling,
-      ...crossLevel.coarse,
-      ...crossLevel.bypass,
-      ...crossLevel.gap,
-      ...(crossLevel.feedback ?? []),
-    ]
-    const allEdges = (artifact.graph?.edges ?? []).map((edge) => edge.id)
-    const missing = allEdges.filter((id) => !listed.includes(id))
-    if (missing.length) problems.push(`这些边没进 crossLevel 任何名单：${missing.slice(0, 5).join(',')}`)
   }
   /**
    * 节点属性与块归属（阶段号已**降级为节点属性**，不再承担分层）：
@@ -261,13 +267,18 @@ function assertShape(artifact) {
   const containerIds = new Set((artifact.graph?.blocks?.items ?? []).map((item) => item.id))
   for (const node of artifact.graph?.nodes ?? []) {
     /**
-     * 容器 = **块**或**子图步骤**（`step:*`）。判据不能拿 `layer === 'subgraph'` 顶替：
-     * `hmf_impl` / `source_grid` 这类**量**也标着 `subgraph`（"该移进子图、还没动手"），
-     * 它们照样要带阶段号。
+     * 容器 = **块**。判据不能写成"有 `parent` 的就是容器"：成员的 `parent` 指着它所属的块，
+     * 而阶段号恰恰是**成员**的属性（块的阶段号是它成员的并集）。
      */
-    const isContainer = containerIds.has(node.id) || String(node.id).startsWith('step:')
+    const isContainer = containerIds.has(node.id)
+    /**
+     * **段容器是装饰**（`type: 'group'`，见 design D8）：它既不是量、也不是代码单元——阶段号是**量**的
+     * 属性，所以它不挂阶段号；它也不是块 / 步骤，所以不受"容器不许挂阶段号"那条管。
+     * 两条例外都写在这一处，别处不再重复判断（自检里同样两处一起放行）。
+     */
+    const isDecoration = node.type === 'group'
     if (isContainer && node.stage !== undefined) problems.push(`容器 ${node.id} 挂着阶段号：阶段号是量的属性，块的阶段号该放 stages`)
-    if (!isContainer && typeof node.stage !== 'string') problems.push(`节点 ${node.id} 缺阶段号属性 stage（阶段号已降级为普通属性）`)
+    if (!isContainer && !isDecoration && typeof node.stage !== 'string') problems.push(`节点 ${node.id} 缺阶段号属性 stage（阶段号已降级为普通属性）`)
     const isEngineering = node.type === 'engineering'
     if (isEngineering !== (node.topics ?? []).includes(IMPL_TOPIC_ID)) {
       problems.push(
@@ -304,6 +315,63 @@ function assertShape(artifact) {
   return problems
 }
 
+/** 站点文档下的模块目录（`docId` 相对 `docs/notes/`） */
+const MODULES_DIR = 'physics-chain/modules'
+/** 路径键（design D2）：块用 `id`（去掉 `block:` 前缀） */
+const docKeyOfBlock = (blockId) => String(blockId).replace(/^block:/, '')
+/**
+ * **一个模块一篇**（design D2）：块与它的全部成员共用这一篇 `modules/<块>.md`，
+ * 成员那几节就是这篇里的 `## <成员标签>`——引用卡片点开同一篇、落在各节上，盘上不再有按成员分家的文件。
+ */
+const docPathOf = (blockId) => `${MODULES_DIR}/${docKeyOfBlock(blockId)}.md`
+/** 真源 `docText` 的键（design D6）：对象 id；层里的头文件成员用 `file:<文件名>` */
+const docTextKeyOf = (memberId, isFileMember) => (isFileMember ? `file:${memberId}` : String(memberId))
+/**
+ * 笔记引用的落点锚点：模块文档里「论文出处」那一节的标题。引用卡片上的 `anchor` 就是这节的 slug，
+ * 视图按它跳到那一节——所以这个字面量留在模块级，建引用的地方读它。
+ */
+const REFERENCE_SECTION = '论文出处'
+
+/**
+ * **摘要位置的公式**（本次变更 design D1）：真源 `docText[id].formula` 逐字转录进产物，
+ * 视图只渲染、不转抄。**只有成员对象**（量 / 驱动量）有这份公式——块与层里的文件成员在真源里就是空的
+ * （`buildModuleDocs` 的写前校验按条断言过），所以这里不写字段、不给空串：
+ * 「带不带 `formula`」就是视图判断"是不是一个可求值的量"的**唯一判据**（不按 `kind` 另写名单）。
+ */
+const formulaFieldOf = (docText, id) => {
+  const formula = String(docText?.[docTextKeyOf(id, false)]?.formula ?? '').trim()
+  return formula ? { formula } : {}
+}
+
+/**
+ * **实现步骤归谁**（design D5）：真源成员的 `codeHints`（`S14.3` 这种带点的一级）展开到更细一级、
+ * 且在真源 `stepSites` 里核定过的**单元**（`S14.3.1`）。
+ *
+ * 一个单元只归**第一个**认领它的量（真源顺序）：`S14.2.*` 同时挂在 `jalpha` 与 `xalpha` 的 hint 上、
+ * `S14.6.*` 同时挂在 `ts` 与 `xc` 上——不认领的话同一段落会落进两篇文档与两份引用清单
+ * （引用清单有去重，文档的段落没有）。没人认领的单元不上图、也不进文档，自检把条数印出来，不静默。
+ *
+ * 生成器与自检**各写一份**（互不 import），改一处另一处立刻红。
+ */
+function stepUnitsOf(chain) {
+  const claimed = new Set()
+  const byMember = new Map()
+  const allUnits = Object.keys(chain.stepSites ?? {}).sort()
+  for (const item of [...(chain.drivers ?? []), ...(chain.nodes ?? [])]) {
+    const hints = (item.codeHints ?? []).map(String).filter((text) => text.includes('.'))
+    const mine = []
+    for (const unit of allUnits) {
+      if (claimed.has(unit) || !(chain.stepSites[unit] ?? []).length) continue
+      if (!hints.some((hint) => unit.startsWith(`${hint}.`))) continue
+      claimed.add(unit)
+      mine.push(unit)
+    }
+    if (mine.length) byMember.set(String(item.id), mine)
+  }
+  return { byMember, unclaimed: allUnits.filter((unit) => !claimed.has(unit)) }
+}
+
+
 async function main() {
   const chain = JSON.parse(await fs.readFile(CHAIN_SOURCE, 'utf8'))
   const inputsText = await fs.readFile(INPUTS_FILE, 'utf8')
@@ -312,7 +380,7 @@ async function main() {
   const declaredParams = Object.keys(chain.params ?? {})
     .filter((key) => Array.isArray(chain.params[key]))
     .flatMap((key) => chain.params[key].map((param) => param.name))
-  const { byStage, paramHints, stats: siteStats } = await buildCodeSites(declaredParams)
+  const { byStage, paramHints, stats: siteStats } = await buildCodeSites(declaredParams, chain.stepSites ?? {})
   /*
     参数 × 节点 矩阵（**后端查表**，供视图做「选中参数 → 高亮相关模块」）：
     归属 = 这个参数被读到时所在的单元（`paramHints`）+ 开关自己声明的 `gatesEdges`。
@@ -356,6 +424,11 @@ async function main() {
       }
     })
   }
+  /**
+   * 参数名 → 类别：`inputs.py` 里定义它的那个 `InputStruct` 子类。
+   * 标签注册表的 `group` 用它——与画布页同一口径，同一个参数在两页不许有两个分类。
+   */
+  const groupOfParam = new Map(Object.values(groups).flat().map((param) => [param.name, param.group]))
   if (problems.length) {
     say('✗ 真源与源码对不上：')
     for (const problem of problems) say(`   · ${problem}`)
@@ -363,19 +436,47 @@ async function main() {
     return
   }
 
-  const withSites = (hints = []) => {
-    const sites = hints.flatMap((stage) => byStage.get(stage) ?? [])
-    return { count: sites.length, sites: sites.slice(0, MAX_SITES) }
+  /**
+   * **落点的出处**：真源 `codeSites`（`[{file, symbol, line, endLine, needles}]`，逐条读源码核定的核心行）
+   * 优先；只有真源没给（还没核定的成员、驱动量）才回落到 atlas「承担者」的函数体（`buildCodeSites`）。
+   * 为什么以真源为准：atlas 的「承担者」是**整文件级**的说法（`tgamma` 就落在 `Constants.c` 一整个文件上），
+   * 而"这个量由哪几行算出"只有读源码才能定。
+   */
+  const sitesOf = (item) => {
+    const declared = Array.isArray(item.codeSites) ? item.codeSites : []
+    if (declared.length) {
+      return declared.map((site) => ({
+        symbol: String(site.symbol ?? item.symbol ?? ''),
+        file: String(site.file ?? ''),
+        line: Number.isFinite(site.line) ? site.line : null,
+        endLine: Number.isFinite(site.endLine) ? site.endLine : null,
+        needles: (site.needles ?? []).map(String),
+        fileWide: false,
+        source: 'chain',
+      }))
+    }
+    return (item.codeHints ?? []).flatMap((stage) => byStage.get(stage) ?? []).map((site) => ({ ...site, source: 'atlas' }))
+  }
+  /**
+   * `sites` 只收**带行号**的落点（视图与自检都按 `file:line` 点开），真源核定了几条就给几条——
+   * 不截断（整函数体、整文件都允许，口径见模块文档的工程节）；
+   * 回落路线里找不到函数体的那些（`pending`）单列一份文件名清单，挂到 `code.pending`，
+   * 由生成日志与自检报出来——既不混进 `sites` 假装有落点，也不静默丢掉。
+   */
+  const withSites = (item) => {
+    const all = sitesOf(item)
+    const sites = all.filter((site) => Number.isFinite(site.line))
+    const pending = [...new Set(all.filter((site) => site.pending).map((site) => site.file))]
+    return { count: sites.length, sites, ...(pending.length ? { pending } : {}) }
   }
 
   /**
    * **层（`kind: 'layer'`）的代码引用直接取真源的层声明**（design D4）——代码锚写着
    * `kind: 'files'` 的，逐个文件给一条**整文件落点**（`fileWide`，行区间 = 1 到文件末尾，
-   * 与 `buildCodeSites` 里整文件落点的口径一致）。为什么不从成员汇总：L1 的 16 个成员是
-   * 公共头文件名、**不是图上节点**（没有 `parent` 子节点可汇总，汇总一定是空的）；L0 的成员
-   * `tgamma` 是常数，真源里本就没有 `codeHints`（`Constants.c:.T_cmb` 是它的出处，但那是整文件级）。
-   * 实测（2026-10-01）：只靠汇总，L0 / L1 两个层的「源码」标签页都是空的，与"12 个模块当下
-   * 两类证据都不空"直接冲突——所以两层的代码引用都走这条直接给出分支。
+   * 与 `buildCodeSites` 里整文件落点的口径一致）。为什么不从成员汇总：层的成员 `tgamma`
+   * 是常数、真源里本就没有 `codeHints`（`Constants.c:.T_cmb` 是它的出处，但那是整文件级），
+   * 汇总一定是空的。实测（2026-10-01）：只靠汇总，层的「源码」标签页是空的，与"每个模块
+   * 当下两类证据都不空"直接冲突——所以层的代码引用走这条直接给出分支。
    */
   const layerFileSites = new Map()
   for (const block of chain.blocks?.items ?? []) {
@@ -384,7 +485,7 @@ async function main() {
     for (const name of block.codeAnchor.files ?? []) {
       const relative = `src/py21cmfast/src/${name}`
       const source = await readSource(path.join(REPO_ROOT, relative), 'c').catch(() => null)
-      sites.push({ file: relative, label: name, line: 1, endLine: source ? source.lines.length : null })
+      sites.push({ file: relative, label: name, line: 1, endLine: source ? source.lines.length : null, fileWide: true, source: 'chain' })
     }
     layerFileSites.set(block.id, sites)
   }
@@ -412,7 +513,7 @@ async function main() {
       return cmpText(String(a.docId), String(b.docId)) || cmpText(String(a.anchor), String(b.anchor))
     })
   }
-  /** 笔记引用：模块骨架文档里的一个小节。`anchor` = 小节标题的 slug，而那个标题就是节点标签本身 */
+  /** 笔记引用：对象**自己那篇**模块文档的标题。`anchor` = 标题的 slug，而标题就是该对象的标签本身 */
   const noteRefOf = (docId, heading) => ({
     docId,
     anchor: slugify(heading),
@@ -421,6 +522,8 @@ async function main() {
     line: null,
     endLine: null,
   })
+  /** 实现步骤归谁（`S14.3.1` 这种单元归哪个量）：文档与引用两处读同一份，见 `stepUnitsOf` */
+  const chainSteps = stepUnitsOf(chain)
 
   const artifact = {
     version: 1,
@@ -431,8 +534,8 @@ async function main() {
       note: chain.note ?? '',
     },
     // 驱动量在真源里是顶层数组、不带 `kind`；产物里补上（视图按种类取色，缺了会炸）
-    drivers: chain.drivers.map((driver) => ({ ...driver, kind: driver.kind ?? 'driver', code: withSites([]) })),
-    nodes: chain.nodes.map((node) => ({ ...node, code: withSites(node.codeHints) })),
+    drivers: chain.drivers.map((driver) => ({ ...driver, kind: driver.kind ?? 'driver', code: withSites(driver) })),
+    nodes: chain.nodes.map((node) => ({ ...node, code: withSites(node) })),
     edges: chain.edges,
     degeneracies: chain.degeneracies,
     /**
@@ -468,7 +571,15 @@ async function main() {
           tagDetails: Object.fromEntries(
             names.map((name) => {
               const meta = paramMeta.get(name)
-              const kind = meta?.switch ? '开关' : driverNames.has(name) ? '驱动量' : String(meta?.role ?? '').startsWith('数值') ? '数值' : '参数'
+              const kind = meta?.switch
+                ? '开关'
+                : driverNames.has(name)
+                  ? '驱动量'
+                  : !groupOfParam.has(name)
+                    ? '非模型参数'
+                    : String(meta?.role ?? '').startsWith('数值')
+                      ? '数值'
+                      : '参数'
               return [
                 `tag:${name}`,
                 // 形状必须与画布一致：`node.tagDetails[tagId]` 是**条目数组**（TagDetailMap）
@@ -478,19 +589,30 @@ async function main() {
           ),
         }
       }
-      const surfaceIds = new Set(nodes.filter((item) => item.layer !== 'subgraph').map((item) => item.id))
       /**
-       * 这个量在仓库里到底有没有代码落点？判据是 `codeHints` 能查到带行号的落点，
-       * **不是**看它有没有 `refs`（真源里根本没有 refs，那是下面才生成的）。
+       * **表面 = 全部量**：函数那一级不再上图（design.md D1），原先靠 `layer === 'subgraph'`
+       * 扣掉的那几个工程项（`hmf_impl` / `source_grid`）如今就是普通的成员，照样在表面上。
        */
-      const hasCodeSite = (item) =>
-        (item.codeHints ?? []).some((hint) => (byStage.get(hint) ?? []).some((site) => Number.isFinite(site.line)))
+      const surfaceIds = new Set(nodes.map((item) => item.id))
+      /**
+       * 对象 → 它所属的子图：引用里「论文出处」那条要指向**对象所在模块那篇**的 `## 论文出处` 小节
+       * （`modules/<块>.md#论文出处`），所以建节点时就得查得到块。
+       */
+      const memberBlockOf = new Map()
+      for (const block of chain.blocks?.items ?? []) {
+        for (const memberId of block.members ?? []) memberBlockOf.set(String(memberId), String(block.id))
+      }
       const gNodes = nodes.map((item) => ({
         id: item.id,
         label: `${item.symbol} · ${item.name}`,
         type: item.kind,
         summary: item.formula ? String(item.formula) : (item.nature?.type ?? item.name),
-        layer: item.layer ?? 'surface',
+        /**
+         * 摘要位置的**公式**（LaTeX，真源 `docText.formula` 逐字转录）：带它的是**可求值的量**，
+         * 视图据此渲染公式而不是给一个输入框；块与层里的文件成员不带这个字段。
+         */
+        ...formulaFieldOf(chain.docText, item.id),
+        layer: 'surface',
         /**
          * **阶段号**（代码阶段，如 `S14`）：已是普通属性，**不再决定分层**——一级怎么划分看真源的
          * `blocks.items`（同一个物理过程常被拆在好几个代码阶段里）。留着是为了属性页能查到
@@ -510,60 +632,23 @@ async function main() {
           ...(isBypassHint(item.codeHints) ? [BYPASS_TOPIC_ID] : []),
         ],
         /**
-         * 「没有代码落点」不等于「缺落点」：驱动量（用户设定）与外部量（如 CMB 温度常数）
-         * **本来就不来自某段代码**。给它们挂身份标签，点击即读到这句话，免得被误当缺口。
-         * 判据：该节点确实没有任何代码落点（`refs` 里没有 file）——不是按名字猜。
+         * 标签注册表装的是**参数名**（一个参数一个标签）。「没有代码落点」这件事不再靠身份标签说：
+         * 驱动量的身份由 `type: driver` 与它的摘要给出，旁路那批量由 `topic:bypass` 给出——
+         * 同一件事只有一处实现，也不让「输入参数」这类词混进参数名册。
          */
-        tags: [
-          ...tagsOf(item).tags,
-          // 按**性质**摆：落在旁路阶段（S04 旁路与后处理接口）里的量是诊断出口，不在主链上 —— 挂身份标签说明
-          ...(isBypassHint(item.codeHints) ? ['tag:旁路出口'] : []),
-          ...(hasCodeSite(item) ? [] : [item.kind === 'driver' ? 'tag:输入参数' : 'tag:外部量']),
-        ],
-        tagDetails: {
-          ...tagsOf(item).tagDetails,
-          ...(isBypassHint(item.codeHints)
-            ? {
-                'tag:旁路出口': [
-                  {
-                    label: item.symbol,
-                    kind: '旁路',
-                    note: '**旁路**：算完顺手给出的诊断（光度函数、光深等），**不在主链上**——看不看它，后面的结果都一样。子图里是它那几段工程实现。',
-                    ref: null,
-                  },
-                ],
-              }
-            : {}),
-          ...(hasCodeSite(item)
-            ? {}
-            : item.kind === 'driver'
-              ? {
-                  'tag:输入参数': [
-                    {
-                      label: item.symbol,
-                      kind: '输入',
-                      note: item.note ?? '由用户设定的输入量：不在某段代码里，因此没有代码落点。',
-                      ref: null,
-                    },
-                  ],
-                }
-              : {
-                  'tag:外部量': [
-                    { label: item.symbol, kind: '外部', note: item.note ?? '外部给定的量：不来自本仓库的代码。', ref: null },
-                  ],
-                }),
-        },
+        tags: [...tagsOf(item).tags],
+        tagDetails: { ...tagsOf(item).tagDetails },
         refs: [
           /**
-           * 论文侧出口：真源里每个量都带 `reviewSection`（论文节号），此前没进图，
-           * 于是检查器的「看引用」永远只能开源码、看不了文献。这里把它作为**文档引用**挂上，
-           * 指向本链自己的论文清单（`docs/notes/physics-chain/papers.md`，自检查它存在）。
+           * 论文侧出口：真源里每个量都带 `reviewSection`（论文节号）。这条**落在对象所在模块那篇**的
+           * `## 论文出处` 小节上（锚点 = 那节的 slug）——点开是同一篇文档，与它的物理、工程一起读，
+           * 不再跳到另一篇论文清单。
            */
           ...(item.reviewSection
             ? [
                 {
-                  docId: 'physics-chain/papers.md',
-                  anchor: '',
+                  docId: docPathOf(memberBlockOf.get(item.id)),
+                  anchor: slugify(REFERENCE_SECTION),
                   label: `论文出处：${item.reviewSection}`,
                   file: '',
                   line: null,
@@ -572,12 +657,12 @@ async function main() {
               ]
             : []),
           /**
-           * 代码落点 = **`code.sites` 那一条清单本身**（`withSites` 已按 `MAX_SITES` 取好）。
-           * 此前这里按每个 hint 各自 `slice(0, 6)`、而 `code.sites` 用的是 `MAX_SITES = 8`——
+           * 代码落点 = **`code.sites` 那一条清单本身**（`withSites` 已把真源核定的落点全取上）。
+           * 此前这里按每个 hint 各自 `slice(0, 6)`、而 `code.sites` 另有一个上限——
            * 同一件事两个上限，于是「源码」标签页的条数与属性页上那个数对不上；更要紧的是自检没法从
            * `code.sites` 独立复算这一份（两处数不一致，"对拍"就永远说不清）。2026-10-01 合成一处。
            */
-          ...withSites(item.codeHints)
+          ...withSites(item)
             .sites.filter((site) => Number.isFinite(site.line))
             .map((site) => ({
               docId: '',
@@ -587,8 +672,33 @@ async function main() {
               line: site.line,
               endLine: site.endLine ?? null,
             })),
+          /**
+           * **它全部实现步骤的核定落点**（design D5）：函数那一级不再上图，原先靠子节点汇总上来的
+           * 落点现在显式并进成员自己。这里不出现步骤名（`label` 仍是成员符号）——步骤名只活在成员
+           * 那篇文档的工程一节里；去重与排序交给下面的 `canonicalRefs`。
+           */
+          ...(chainSteps.byMember.get(item.id) ?? [])
+            .flatMap((unit) => chain.stepSites[unit] ?? [])
+            .filter((site) => Number.isFinite(site.line))
+            .map((site) => ({
+              docId: '',
+              anchor: '',
+              label: item.symbol,
+              file: String(site.file ?? ''),
+              line: site.line,
+              endLine: Number.isFinite(site.endLine) ? site.endLine : null,
+            })),
         ],
       }))
+      /**
+       * **箭头上的文字只写跨块交付的那个量名，量 → 量的边不写字**。
+       *
+       * 这一层全是量 → 量的依赖：两端本身就是画布上的两个量盒，再写一遍只有两种可能——
+       * 抄一遍盒子名（重复），或者原先那样写式号（`Eq.6`：读者拿着它去不了任何地方，
+       * 出处本该在数据与文档表格里）。所以这一层一律空标签；跨块交付边（接口边 / 回流边）
+       * 才写量名，见下面的 `label: item.names.join('、')` 与回流那一段。
+       * 真源的 `eq` 字段保留：它是这条边的**出处**，自检按「每条边都带出处」核对，只是不上图。
+       */
       const gEdges = chain.edges.map((edge) => {
         const key = `${edge.from}->${edge.to}`
         const gates = [...chain.params.effects].filter((param) => (param.gatesEdges ?? []).includes(key))
@@ -596,7 +706,7 @@ async function main() {
           id: key,
           source: edge.from,
           target: edge.to,
-          label: edge.eq ?? '',
+          label: '',
           type: 'depends_on',
           directed: true,
           conditional: gates.length > 0,
@@ -616,151 +726,28 @@ async function main() {
        * `updatedAt` 刻意留空：写时间戳会让每次生成的产物都不同，破坏幂等自检。
        */
       const tagRegistry = [
-        // 后两个是「身份标签」：给没有代码落点的量说明它们本来就不来自代码
-        ...new Set([...Object.keys(paramMatrix), ...nodes.flatMap((item) => item.codeNames ?? []), '输入参数', '外部量', '旁路出口']),
+        // 注册表里只有**参数名**：一个参数一个标签，不放身份说明那类词
+        ...new Set([...Object.keys(paramMatrix), ...nodes.flatMap((item) => item.codeNames ?? [])]),
       ]
         .sort()
-        .map((name) => ({ id: `tag:${name}`, name, description: paramMeta.get(name)?.role ?? '' }))
+        .map((name) => ({
+          id: `tag:${name}`,
+          name,
+          description: paramMeta.get(name)?.role ?? '',
+          /**
+           * 类别就写进注册表：**不写**，视图只能把它们全归进「未分类」，
+           * 一排标签挤在一顶看不懂的标题下。
+           * 取 `inputs.py` 的类名；真源参数表里没有的代码名（分析侧自选的 `K_TARGET` 之类，
+           * 真源已声明「不是模型参数」）单列一类。
+           */
+          group: groupOfParam.get(name) ?? '非模型参数',
+        }))
       /** 标签 id → 显示名：块级标签明细要用**同一份名字**（不另起一套命名） */
       const tagNameOf = new Map(tagRegistry.map((tag) => [tag.id, tag.name]))
       /**
        * 坐标：按"从驱动量出发要走多少步"分层，**观测量在上、参数在下**（与页面的自顶向下口径一致）。
        * 目的有二：① 一打开就看得见东西（不依赖画布是否自动排布）；② 排布是确定性的，幂等自检不受影响。
        */
-      /**
-       * 坐标：**自顶向下的多叉树布局**——从"链条终点的产物"（没有下游的节点）开始，
-       * 往下逐层展开"它由什么决定"。层号 = 到终点的步数（终点 0，越往下越大）；
-       * 同层内按**父节点的位置取重心**排序，免得同一支的几块被拆散。
-       * 这是 v1：交叉不做全局最优，但不重叠、方向正确、且完全确定（幂等自检不受影响）。
-       */
-      const level = new Map(gNodes.map((node) => [node.id, 0]))
-      for (let pass = 0; pass < gNodes.length; pass += 1) {
-        let moved = false
-        for (const edge of gEdges) {
-          const next = (level.get(edge.target) ?? 0) + 1
-          if (next > (level.get(edge.source) ?? 0)) {
-            level.set(edge.source, next)
-            moved = true
-          }
-        }
-        if (!moved) break
-      }
-      /**
-       * **骨干树 + 交叉边**（回答"为什么会出现跨层"）。
-       *
-       * 分层是按**最长路径**算的：`level(s) = 1 + max{level(t) : s→t}`，于是每条边 `s→t` 的层差恒 ≥1，
-       * 且**层差 = 1 当且仅当这条边落在某条最长路径上**。所以"跨层箭头"不是数据错：
-       * 依赖本身是 **DAG**（一个量常常有好几个上游），把它硬画成树，就只有落在最长路径上的那条能层差 1，
-       * 其余的必然跨层。
-       *
-       * 解法不是删边（每条边都是真实公式依赖，删掉就是篡改物理），而是**把树和交叉边分开画**：
-       *   · **骨干边**：每个量挑**一个**主父（出边里 `level(target)` 最大的那条，即最长路径父，层差恒 = 1）
-       *     —— 骨干上每个节点恰好一个父，骨干就是一棵**真正的多叉树**，结构上不可能跨层；
-       *   · **交叉边**：其余依赖照留，但按**成因**标出来（判据全取自数据，不新造）：
-       *       - `sibling`：层差 1 的第二个父（多父的直接后果，画在骨干旁边）；
-       *       - `coarse`：层差 >1 且**存在间接路径**——这条直连依赖同时被更细的链条蕴含（粗粒度/"汇总"边）；
-       *       - `bypass`：层差 >1、无间接路径，但目标是 **S04 旁路出口**（诊断量，如 τ_e、φ(M_1500)）
-       *         —— 诊断量本来就是输出时直接由上游算出来的，**不在主链上**，跨层是它应有的样子；
-       *       - `gap`：层差 >1、无间接路径、也不是旁路 ⇒ **链条上确实缺了中间量**，显式登记（不许静默）。
-       * 判据"是不是旁路出口"与节点上 `tag:旁路出口` 同源（`codeHints[0]` 以 `S04` 开头）。
-       */
-      const rawById = new Map(nodes.map((item) => [item.id, item]))
-      const outAdj = new Map(gNodes.map((node) => [node.id, []]))
-      for (const edge of gEdges) outAdj.get(edge.source)?.push(edge.target)
-      /** 从 `from` 出发能不能走到 `to`（深度优先，节点数十来个，不需要更聪明的做法） */
-      const reaches = (from, to) => {
-        const seen = new Set([from])
-        const queue = [from]
-        while (queue.length) {
-          const current = queue.shift()
-          for (const next of outAdj.get(current) ?? []) {
-            if (next === to) return true
-            if (seen.has(next)) continue
-            seen.add(next)
-            queue.push(next)
-          }
-        }
-        return false
-      }
-      /** 有没有"绕一圈也能到"的更细链条：source 还有别的出边，那些出边能走到 target */
-      const hasIndirectPath = (edge) =>
-        (outAdj.get(edge.source) ?? []).some((other) => other !== edge.target && reaches(other, edge.target))
-      /** 目标是不是旁路/诊断出口（S04 旁路与后处理接口）—— 与节点身份标签同源判据 */
-      const isBypassTarget = (edge) => isBypassHint(rawById.get(edge.target)?.codeHints)
-      /** 主父：出边里 level 最大的那条（层差恒 = 1）；并列时按 target 名字稳定取一个 */
-      const backboneOf = new Map()
-      for (const node of gNodes) {
-        const outs = gEdges.filter((edge) => edge.source === node.id)
-        if (!outs.length) continue
-        const best = [...outs].sort((a, b) => (level.get(b.target) ?? 0) - (level.get(a.target) ?? 0) || (a.target < b.target ? -1 : 1))[0]
-        best.backbone = true
-        best.levelSpan = 1
-        backboneOf.set(node.id, best.target)
-      }
-      const crossLevel = {
-        levels: {},
-        backbone: [],
-        sibling: [],
-        coarse: [],
-        bypass: [],
-        gap: [],
-        /** 跨红移回流单列一张名单：它反向、不进主序拓扑（见 design.md D3②） */
-        feedback: [],
-        stats: {},
-      }
-      for (const node of gNodes) crossLevel.levels[node.id] = level.get(node.id) ?? 0
-      /** 主父表（量 → 它在骨干树上的父）：自检用它验证"每个量恰好一个父" */
-      crossLevel.parentOf = Object.fromEntries([...backboneOf.entries()].sort(([a], [b]) => (a < b ? -1 : 1)))
-      for (const edge of gEdges) {
-        const span = (level.get(edge.source) ?? 0) - (level.get(edge.target) ?? 0)
-        edge.levelSpan = edge.levelSpan ?? span
-        if (edge.backbone) {
-          crossLevel.backbone.push(edge.id)
-          continue
-        }
-        edge.crossLink = true
-        if (span === 1) {
-          edge.spanKind = 'sibling'
-          crossLevel.sibling.push(edge.id)
-        } else if (hasIndirectPath(edge)) {
-          edge.spanKind = 'coarse'
-          crossLevel.coarse.push(edge.id)
-        } else if (isBypassTarget(edge)) {
-          edge.spanKind = 'bypass'
-          crossLevel.bypass.push(edge.id)
-        } else {
-          edge.spanKind = 'gap'
-          crossLevel.gap.push(edge.id)
-        }
-        /**
-         * 跨层这件事要**在图上一眼读得出来**：层差与成因写进边的说明（检查器直接显示这段）。
-         * 成因不写成"推测"——`coarse` / `bypass` 都是上面按数据判的。
-         */
-        const CAUSE = {
-          sibling: '同层的第二个上游（多父，不是跨层）',
-          coarse: '跨层：这条直连依赖已被更细的链条蕴含（汇总边），不是缺环节',
-          bypass: '跨层：目标是旁路/诊断出口（S04），诊断量本来就不在主链上',
-          gap: '跨层且无间接路径：链条上缺中间量（待补，见 crossLevel.gap）',
-        }
-        edge.note = [
-          edge.note,
-          `第 ${level.get(edge.source) ?? 0} 层 → 第 ${level.get(edge.target) ?? 0} 层（跨 ${span} 层）｜${CAUSE[edge.spanKind]}`,
-        ]
-          .filter(Boolean)
-          .join('；')
-      }
-      crossLevel.stats = {
-        edges: gEdges.length,
-        backbone: crossLevel.backbone.length,
-        sibling: crossLevel.sibling.length,
-        coarse: crossLevel.coarse.length,
-        bypass: crossLevel.bypass.length,
-        gap: crossLevel.gap.length,
-      }
-      /** 每条非骨干边都必须有成因（漏标就是静默），写前校验与自检都会再查一遍 */
-      for (const edge of gEdges) {
-        if (!edge.backbone && !edge.spanKind) throw new Error(`边 ${edge.id} 既不是骨干边，也没有成因分类`)
-      }
       /**
        * 自顶向下的多叉树，**在"过程框"这一级排**：
        *   ① 先算框的层号（一个框的消费者在上、它的上游在下）；同层框按 id 稳定排序、横向铺开；
@@ -815,7 +802,6 @@ async function main() {
         interfaceMap.set(key, item)
       }
       const interfaceEdges = [...interfaceMap.entries()].map(([key, item]) => {
-        const span = (blockOrder.get(item.to) ?? 0) - (blockOrder.get(item.from) ?? 0)
         return {
           id: `iface:${key}`,
           source: item.from,
@@ -828,28 +814,25 @@ async function main() {
           /** 静息隐藏，悬浮两端任一块时显现（视图读这个字段，见 design.md D5） */
           focusOnly: true,
           /**
-           * 位次差按**真源主序位次**算（`order`）：接口边本身就是"汇总边"——它由那几条更细的
-           * "量 → 量"依赖汇总而来（`note` 里列着）。相邻的按规矩标 `sibling`（写前校验与自检都查这一条）。
+           * 接口边是**汇总边**：它由那几条更细的"量 → 量"依赖汇总而来（`note` 里列着）。
+           * 这里只留方向：`order(to) > order(from)`——画法交给视图（悬浮显现的箭头）。
            */
-          levelSpan: span,
-          spanKind: span === 1 ? 'sibling' : 'coarse',
           crossLink: true,
-          note: `块间接口：由这些跨界依赖汇总而来 —— ${item.relations.join('、')}；主序第 ${blockOrder.get(item.from)} 位 → 第 ${blockOrder.get(item.to)} 位（跨 ${span} 位）`,
+          note: `块间接口：由这些跨界依赖汇总而来 —— ${item.relations.join('、')}；段内第 ${blockOrder.get(item.from)} 位 → 第 ${blockOrder.get(item.to)} 位`,
         }
       })
       /**
-       * 接口边也要进 `crossLevel` 的分类名单：写前校验要求"graph.edges 里每条边都在某个名单里"，
-       * 不登记就会报"这些边没进 crossLevel 任何名单"。
+       * **块间交付边的方向**：位次必须递增（自左向右 / 自上而下，没有回指）——这里只留这条
+       * "不许写反"的写前校验。
        */
       for (const edge of interfaceEdges) {
-        if (!Number.isInteger(edge.levelSpan) || edge.levelSpan < 1) {
+        const span = (blockOrder.get(edge.target) ?? 0) - (blockOrder.get(edge.source) ?? 0)
+        if (!Number.isInteger(span) || span < 1) {
           throw new Error(
-            `接口边 ${edge.id} 的位次差是 ${edge.levelSpan}：主序边必须自上而下、跨正位次（真源 order 写反了？反馈边请写进 feedback 段）`,
+            `接口边 ${edge.id} 的位次差是 ${span}：主序边必须自左向右/自上而下、跨正位次（真源 order 写反了？回流请写进 feedback 段）`,
           )
         }
-        ;(edge.spanKind === 'sibling' ? crossLevel.sibling : crossLevel.coarse).push(edge.id)
       }
-      crossLevel.stats.interfaceEdges = interfaceEdges.length
       /**
        * **反馈边（跨红移回流）**：真源 `feedback` 段单列，三条都回到「网格化源项」块（`HaloBox.c:487/495/496`）。
        * 它们**不进主序**：主序边必须跨正位次，而回流天然跨负位次，混在一起会成环（`HaloBox` 与 `IonizedBox`
@@ -866,15 +849,15 @@ async function main() {
           )
         }
         const fromSymbol = symbolOf.get(item.fromNode) ?? item.fromNode
-        const toSymbol = symbolOf.get(item.toNode) ?? item.toNode
         return {
           id: `feedback:${item.from}->${item.to}`,
           source: item.from,
           target: item.to,
-          /** 两端的具体量：悬浮时标签写它（如 `T_S → Ṅ_ion`），因为回流落在哪个量上是块级的执行细节 */
+          /** 两端的具体量（回流落在哪个量上是块级的执行细节，写进数据供图例、检查器与自检读） */
           fromNode: item.fromNode,
           toNode: item.toNode,
-          label: `${fromSymbol} → ${toSymbol}`,
+          /** 标签与接口边同一条口径：只写**交付的那个量**（来源端那个），不写 `A → B` 那种两端并列 */
+          label: fromSymbol,
           type: 'depends_on',
           directed: true,
           optional: false,
@@ -884,22 +867,28 @@ async function main() {
           focusOnly: false,
           /** 与接口边区分：`feedback` 走独立样式，箭头朝上 */
           kind: 'feedback',
-          levelSpan: span,
-          spanKind: 'feedback',
           crossLink: true,
           /** 代码出处（自检要求三类跨块关系都带）：文件 + 行号 */
           codeRef: item.codeRef,
           note: `跨红移回流（${item.codeRef}）：${item.note}`,
         }
       })
-      for (const edge of feedbackEdges) crossLevel.feedback.push(edge.id)
-      crossLevel.stats.feedbackEdges = feedbackEdges.length
       /**
-       * 块的主序位次：直接来自真源、**不做拓扑重算**（重算会把反馈边算进去成环，见 design.md D4）；
-       * `levels` 是"量"的层号，两者不是一回事，分开放。
+       * 块的主序位次：直接来自真源、**不做拓扑重算**（重算会把反馈边算进去成环）；
+       * 它现在是**段内**的横向位次，顺序由摆放承担。
        */
-      crossLevel.blockOrder = Object.fromEntries([...blockOrder.entries()].sort(([a], [b]) => (a < b ? -1 : 1)))
-      const boxLevel = new Map(blockItems.map((item) => [item.id, item.order ?? 0]))
+      const boxOrder = new Map(blockItems.map((item) => [item.id, item.order ?? 0]))
+      /**
+       * **段（`phase`）与段序**：一级按段摆放——段自上而下竖摞，**段内按位次（`order`）自左向右**排开
+       * （段即一条水平带，同段同一条 y）。于是顺序完全由摆放表达：不画「下一步」连线，也不再需要脊轨、
+       * 步序刻度这类替代品（见 spec「一级按三段骨架与执行序摆放」）。真源里出现未登记的段名时，
+       * 排在已知段之后（稳定兜底）。
+       *
+       * **层（`phase: 'layer'`）占一条带、但不出段框**：它是"全程只读、不属于任何一步"的参照物，
+       * 没有"这一步"可以包，所以容器那一节跳过它——块自己单独占最上面那条带。
+       */
+      const boxPhase = new Map(blockItems.map((item) => [item.id, item.phase ?? 'prep']))
+      const KNOWN_PHASES = ['layer', 'prep', 'loop']
       /** 层（`kind:'layer'`）不是过程：不画成过程块、不可进入、不计入过程数（用户 2026-09-30 定的 A 方案） */
       const layerIds = new Set(blockItems.filter((item) => item.kind === 'layer').map((item) => item.id))
       /**
@@ -915,29 +904,146 @@ async function main() {
        */
       const blockSizeOf = (id) => measureBoxSize(blockItems.find((item) => item.id === id)?.label ?? id)
       const boxRows = new Map()
-      for (const id of boxIds) {
-        const lvl = boxLevel.get(id) ?? 0
-        boxRows.set(lvl, [...(boxRows.get(lvl) ?? []), id])
+      // 段内次序 = 位次（`order`）；并列时按 id 稳定排序（幂等）
+      for (const id of [...boxIds].sort(
+        (a, b) => (boxOrder.get(a) ?? 0) - (boxOrder.get(b) ?? 0) || (a < b ? -1 : 1),
+      )) {
+        const phase = boxPhase.get(id) ?? 'prep'
+        boxRows.set(phase, [...(boxRows.get(phase) ?? []), id])
       }
-      /** 每行中心的 y：行高取该行**最高的框**，行距恒为 `GAP`（框高变了不用改间距） */
+      /**
+       * 每段中心的 y：段高取该段**最高的块**，但让位按**框高**——块外面还套着段容器，
+       * 框 = 本段块并集 + 上下各一圈 `FRAME_PADDING`，画布上块还比模型高 `BADGE_LINE`。
+       * 于是"框与框之间恒为 `GAP`"：与段内块距、成员距、步骤距是同一个数，段距不是另一套步长。
+       * （只按块高让位时，画布上相邻两段的框会纵向压进来——框线切过邻段的块。）
+       */
       const rowY = new Map()
       let rowsBottom = 0
-      for (const lvl of [...boxRows.keys()].sort((a, b) => a - b)) {
-        const height = Math.max(...boxRows.get(lvl).map((id) => blockSizeOf(id).height))
-        rowY.set(lvl, rowsBottom + height / 2)
-        rowsBottom += height + GAP
+      const phaseOrder = [
+        ...KNOWN_PHASES,
+        ...[...boxRows.keys()].filter((phase) => !KNOWN_PHASES.includes(phase)).sort(),
+      ]
+      for (const phase of phaseOrder) {
+        const ids = boxRows.get(phase)
+        if (!ids?.length) continue
+        const height = Math.max(...ids.map((id) => blockSizeOf(id).height))
+        const frameHeight = height + BADGE_LINE + FRAME_PADDING * 2
+        rowY.set(phase, rowsBottom + frameHeight / 2)
+        rowsBottom += frameHeight + GAP
       }
       const boxCenter = new Map()
-      for (const [lvl, ids] of boxRows) {
-        // **自顶向下**：层往下走（y），同一位次的块往右排（x）；同排按**各自的宽**依次让开
+      for (const [phase, ids] of boxRows) {
+        /**
+         * **段 = 一条水平带**：段往下走（y），段内自左向右（x）；同段按**各自的宽**依次让开。
+         *
+         * 这里**只按块自己的宽**排——不按"块 + 它那些成员"的横铺宽度。理由：成员只在自己块的
+         * 子图标签页里出现，不同块的成员**永不同屏**，因此它们即使在同一 y 上横向重叠也不可见；
+         * 而按包围宽度排会把段内块间距撑到几百，直接打破"全图只有一个间距"那条不变量
+         * （成员与自己的块同一条 y 是另一条不变量，两者在"块能否排得下自己的成员"上并不冲突）。
+         */
         const xs = stackCenters(ids.map((id) => blockSizeOf(id)), 'x', 0)
-        ids.forEach((id, index) => boxCenter.set(id, { x: xs[index], y: rowY.get(lvl) }))
+        ids.forEach((id, index) => boxCenter.set(id, { x: xs[index], y: rowY.get(phase) }))
+      }
+      /**
+       * **段容器**（`type: 'group'`，design D8 / spec「段是容器，不参与关系与导航」）：有块的段各出一个
+       * 容器，块是它的子节点——"哪些块在同一步"由**包含**表达，静息即读得出来（容器的标题在任何
+       * 缩放下都留着）。容器不参与关系、标签、进入、命中，也不进图例：与画布页那些大框同一套口径。
+       *
+       * 尺寸与坐标**都不在这里给**：容器由子节点包围盒撑开（样式表只给下限 `min-width / min-height`）、
+       * 坐标由子节点推导（`cytoscapeSetup` 的"容器的坐标一律由子节点推导"）。
+       * 没有块的段**不出容器**：空框没有子节点可推导，也没有内容可包。
+       */
+      /**
+       * 段标题取**短名**：容器标题贴着框的左上角、任何缩放下都在，写长了会压住块。
+       * 完整那句进 `summary`，在属性页读——说的是**这一段在做什么**（只算一次 / 每个红移重算），
+       * 不写代码坐标：`all_redshifts` 这类名字在这一页没有落点，读的人拿不到可核验的东西。
+       */
+      const SEG_LABELS = {
+        prep: '红移循环前',
+        loop: '逐红移循环',
+      }
+      const SEG_SUMMARIES = {
+        prep: '与红移无关的底子：只算一次，之后每个红移都在它上面接着算',
+        loop: '每个红移重算一遍：沿时间从高红移往低红移推进',
+      }
+      /**
+       * **段的容器只给"执行的步"**：`layer` 那条带上只放层（它不是一步），所以不出容器——
+       * 于是容器数 = 段数（红移循环前 / 逐红移循环），层块自己挂在顶层。
+       */
+      const SEG_PHASES = new Set(['prep', 'loop'])
+      const segNodes = []
+      for (const phase of phaseOrder) {
+        if (!SEG_PHASES.has(phase)) continue
+        const ids = boxRows.get(phase)
+        if (!ids?.length) continue
+        const label = SEG_LABELS[phase] ?? phase
+        const segNode = {
+          id: `seg:${phase}`,
+          label,
+          type: 'group',
+          /** 段名（数据侧，供自检与视图按段说话） */
+          phase,
+          layer: 'surface',
+          summary: SEG_SUMMARIES[phase] ?? '',
+          refs: [],
+          tags: [],
+          topics: [],
+          parent: null,
+          enterable: false,
+          observable: false,
+          conditional: false,
+        }
+        /**
+         * 只留一份**兜底**坐标（段的中心）：视图一律按子节点包围盒推导、用不到它，
+         * 留一份是为了产物本身自洽——离线工具与自检可以直接拿坐标说话。
+         */
+        segNodes.push({ ...segNode, position: { x: 0, y: Math.round(rowY.get(phase)) } })
       }
 
+      /**
+       * **块内边**（两端同属一个块）：块内次序与连通分量都读它。块内边**不进主图**，
+       * 只在这个块的子图里画（`internalEdgesOf` 供视图与自检取用）。
+       * 定义在这里（而不是原来靠后的位置）是因为**成员排布**先要用它。
+       */
+      const internalEdgesOf = new Map(boxIds.map((id) => [id, []]))
+      for (const edge of gEdges) {
+        const from = blockOfNode.get(edge.source)
+        const to = blockOfNode.get(edge.target)
+        if (from && from === to) internalEdgesOf.get(from).push(edge)
+      }
+      /**
+       * **块内次序 = 块内边的拓扑序**（Kahn，从入到出）：分层模型退场后，"成员谁在左"不再由层号决定，
+       * 而由**这个块自己的数据流**决定——读起来就是这一步先算什么、后算什么。并列项按 id 稳定排序（幂等）；
+       * 万一有环或悬空，兜底把剩下的按 id 接在后面，**不许丢成员**。
+       */
+      const memberOrderOf = (ids, edges) => {
+        const inside = new Set(ids)
+        const indegree = new Map(ids.map((id) => [id, 0]))
+        const outs = new Map(ids.map((id) => [id, []]))
+        for (const edge of edges) {
+          if (!inside.has(edge.source) || !inside.has(edge.target) || edge.source === edge.target) continue
+          outs.get(edge.source).push(edge.target)
+          indegree.set(edge.target, indegree.get(edge.target) + 1)
+        }
+        const ready = ids.filter((id) => indegree.get(id) === 0).sort()
+        const placed = []
+        while (ready.length) {
+          const id = ready.shift()
+          placed.push(id)
+          for (const next of outs.get(id)) {
+            indegree.set(next, indegree.get(next) - 1)
+            if (indegree.get(next) !== 0) continue
+            const at = ready.findIndex((item) => item > next)
+            if (at < 0) ready.push(next)
+            else ready.splice(at, 0, next)
+          }
+        }
+        return [...placed, ...ids.filter((id) => !placed.includes(id)).sort()]
+      }
       const membersOfBox = new Map(boxIds.map((id) => [id, [...(blockMembers.get(id) ?? [])]]))
       for (const [boxId, ids] of membersOfBox) {
         const center = boxCenter.get(boxId)
-        const ordered = [...ids].sort((a, b) => (level.get(a) ?? 0) - (level.get(b) ?? 0) || (a < b ? -1 : 1))
+        const ordered = memberOrderOf(ids, internalEdgesOf.get(boxId) ?? [])
         // 同一块里的量：也按**各自的宽**让开，间距同样是那个常数（这块的标签页取景时字才够大）
         const xs = stackCenters(
           ordered.map((id) => measureBoxSize(gNodes.find((item) => item.id === id)?.label)),
@@ -967,15 +1073,9 @@ async function main() {
       }
 
       /**
-       * **块内边与连通分量**：可进入判据（成员非空且分量 = 1）与块级数字断言都读它。
-       * 块内边**不进主图**，只在这个块的子图里画（`internalEdgesOf` 供视图与自检取用）。
+       * **块内连通分量**：可进入判据（成员非空且分量 = 1）与块级数字断言都读它。
+       * `internalEdgesOf` 已在上面的成员排布处定义（那里先用到了它）。
        */
-      const internalEdgesOf = new Map(boxIds.map((id) => [id, []]))
-      for (const edge of gEdges) {
-        const from = blockOfNode.get(edge.source)
-        const to = blockOfNode.get(edge.target)
-        if (from && from === to) internalEdgesOf.get(from).push(edge)
-      }
       /**
        * 成员分几簇（并查集）。**只数"是图上节点"的成员**：层的成员里有文件（L1 的 16 个头文件），
        * 它们不在图上、也不参与块内边，混进来会把 L1 报成"16 簇"这种没法解释的数。
@@ -993,10 +1093,10 @@ async function main() {
         return new Set(memberIds.map((id) => find(id))).size
       }
       /**
-       * **一级 = 12 个块**（10 个过程块 + 2 个层）：块是 `type: 'process'` 的**普通节点**、
-       * 不是 `group` 容器——容器之间不许有边（你 2026-09-30 的口径），而块间要画 21 条接口边
+       * **一级 = 11 个块**（10 个过程块 + 1 个层）：块是 `type: 'process'` 的**普通节点**、
+       * 不是 `group` 容器——容器之间不许有边，而块间要画 21 条接口边
        * （见 design.md D1）。反过来说明它必须是普通节点：成员靠 `parent` 指向它，画布
-       * "焦点只看直系子节点"那套现成机制于是直接生效——一级天然只剩 12 个块，块内成员不同屏。
+       * "焦点只看直系子节点"那套现成机制于是直接生效——一级天然只剩 11 个块，块内成员不同屏。
        * 位置取成员包围盒的中心，尺寸交给画布。
        */
       const blockNodes = []
@@ -1022,12 +1122,19 @@ async function main() {
           // `layer` 只在册的两值里取：块在一级，属于 surface（子图里的步骤才是 subgraph）
           layer: 'surface',
           /**
-           * `process` = 一个 Compute* 步（可进入）；`layer` = 非常数/共享内核层（不可进入、不计入过程数）。
+           * `process` = 一个 Compute* 步（可进入）；`layer` = 层（不可进入、不计入过程数、不装进段容器）。
            * 判据来自真源声明的 `kind`，旧稿那套"成员连通性推断"（`band`）已退场——它会把 M4 这种
            * 成员分两簇的过程块误判成带。
            */
           blockKind: block.kind ?? 'process',
           order: block.order ?? 0,
+          /**
+           * **段**：这块在代码流程的哪一段（真源声明）——`layer` 层（不属任何一步）/ `prep` 预备（一次性）/ `loop` 逐红移循环。
+           * 一级按段摆放（段即一条水平带），顺序由摆放承担、不再画「下一步」连线；
+           * `flowStep` 是它在主循环里的第几步（只有循环段的块有），供自检与主循环调用序对拍。
+           */
+          phase: block.phase ?? 'prep',
+          flowStep: block.flowStep ?? null,
           /** 代码锚（`.c` + `Compute*` + 盒子结构名）：属性页显示"这一块是哪段代码"，自检逐条断言它真实存在 */
           codeAnchor: block.codeAnchor ?? null,
           /**
@@ -1055,7 +1162,13 @@ async function main() {
            * ① 暗物质晕质量函数 / ② 晕质量阈值 没有上游 → 空数组（子图里就只剩自己的成员）。
            */
           contexts: [...(blockInputs.get(block.id) ?? [])].sort(),
-          parent: null,
+          /**
+           * **父级 = 段容器**（design D8）：过程块装在它那一段的容器里，"哪些块在同一步"由包含表达；
+           * **层没有容器**（它不是一步），所以父级为空、单独挂在顶层。
+           * 一级的可见集因此是"顶层容器 + 装进去的块 + 层自己"（`hierarchy.ts` 的装饰容器后代递归）——
+           * 与"一级 = 11 个块"那条口径一致：容器是装饰，块才是对象。
+           */
+          parent: block.kind === 'layer' ? null : `seg:${block.phase ?? 'prep'}`,
           observable: false,
           conditional: false,
           topics: [],
@@ -1083,12 +1196,14 @@ async function main() {
           ),
           /**
            * **块自身的引用**（成员的并集在下面「引用汇总」那段里并进来，这里只写"块自己的"）：
-           *   · 一条**模块笔记**：指向自己的骨架文档（锚点 = 文档 H1 的 slug，即块标签）；
-           *   · 层的话再加整文件级的代码落点（`layerFileSites`，见那里的说明）。
-           * 块此前是**写死的空数组**——页面于是有一个"点不开"的入口（两类引用都空）。
+           * 指向 `modules/<块>.md`（锚点 = 文档 H1 的 slug，即块标签）；层再加整文件级的代码落点
+           * （`layerFileSites`，见那里的说明）。
+           * 块上必须有落点：选中一个块要能回答"这一块算在哪几行"，而属性页只列非空的那一类——
+           * 「源码」空着的话那个标签页根本不出现，等于没有代码入口。
            */
           refs: [
-            ...(block.noteDoc ? [noteRefOf(String(block.noteDoc), String(block.label))] : []),
+            /** 块自己的那篇（design D4）：指向 `modules/<块>.md`，锚点 = 那篇的 H1，即块标签 */
+            noteRefOf(docPathOf(block.id), String(block.label)),
             ...(layerFileSites.get(block.id) ?? []).map((site) => ({
               docId: '',
               anchor: '',
@@ -1103,129 +1218,42 @@ async function main() {
       }
 
       /**
-       * **子图层**：模块内部的**步骤**。来源是 atlas 更深一级的单元——
-       * 比如 `scaling_relations` 的 hint 是 `S12.1`，那么 `S12.1.1`、`S12.1.2` 这些单元就是它里面的步骤。
-       * 步骤节点挂成模块的**子节点**（`parent`），于是双击模块进去（画布现成的聚焦/子图行为）就能看到它们。
-       * 只收比 hint 更深一级的单元；没有更深单元的模块**不进子图**（不凭空造步骤）。
+       * （原「子图层」整段已退场：**函数那一级不再上图**。物理链的底是物理量与物理过程——谁把它算出来、
+       *   切在哪几个函数里，回答的是"这个量由哪几行算出"，归代码落点管（`stepSites` 仍是唯一产地），
+       *   不归图层管。步骤的直接后果有两处：成员节点的直接引用并进它全部步骤的核定落点（见成员节点构造处），
+       *   模块文档的工程一节按步骤成小节（手写那批，见 design.md D1 / D5）。）
        */
-      const subgraphNodes = []
-      const subgraphIndex = {}
-      /** 步骤节点 id 全局唯一：同一个单元只归一个模块（先到先得），避免"一节点两父" */
-      const usedStepIds = new Set()
-      for (const node of nodes) {
-        const hints = (node.codeHints ?? []).map(String)
-        if (!hints.length) continue
-        const byUnit = new Map()
-        for (const hint of hints) {
-          /**
-           * **只有更细一级的 hint 才收内部步骤**：`S12.1` → `S12.1.1 / S12.1.2` ✓。
-           * 阶段级 hint（`S11` 这种不带点的）**不收**：否则会把整个阶段的所有单元都算成这一个量的内部步骤，
-           * 还会在两个量之间重复建同名节点（同一个 id 挂两个父节点 = 非法图）。宁缺勿滥。
-           */
-          if (!hint.includes('.')) continue
-          for (const site of byStage.get(hint) ?? []) {
-            const unit = String(site.unit ?? '')
-            if (!unit || unit === hint || !unit.startsWith(`${hint}.`)) continue
-            if (usedStepIds.has(`step:${unit}`)) continue
-            byUnit.set(unit, [...(byUnit.get(unit) ?? []), site])
-          }
-        }
-        if (!byUnit.size) continue
-        const stepIds = []
-        const anchor = gNodes.find((item) => item.id === node.id)?.position ?? { x: 0, y: 0 }
-        const stepEntries = [...byUnit.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        /** 步骤之间同样是「实测框宽 + 常数间距」，围绕所属的量居中（第三层标签页取景时字才够大） */
-        const stepXs = stackCenters(
-          stepEntries.map(([, sites]) => measureBoxSize(sites[0].unitName ?? '')),
-          'x',
-          anchor.x,
-        )
-        stepEntries.forEach(([unit, sites], index) => {
-          const stepId = `step:${unit}`
-          usedStepIds.add(stepId)
-          stepIds.push(stepId)
-          subgraphNodes.push({
-            id: stepId,
-            // 标签只写步骤名：`unit`（阶段号）是代码坐标，留在 stepId / refs 的 label 里，不上框
-            label: sites[0].unitName ?? '',
-            type: 'method',
-            summary: sites[0].unitName ?? '',
-            layer: 'subgraph',
-            parent: node.id,
-            observable: false,
-            conditional: false,
-            // 旁路阶段内部的步骤同样挂旁路话题（进子图看它时与一级口径一致）
-            topics: isBypassHint(node.codeHints) ? [BYPASS_TOPIC_ID] : [],
-            tags: [],
-            tagDetails: {},
-            refs: sites
-              .filter((site) => Number.isFinite(site.line))
-              .slice(0, 4)
-              .map((site) => ({
-                docId: '',
-                anchor: '',
-                label: unit,
-                file: site.file,
-                line: site.line,
-                endLine: site.endLine ?? null,
-              })),
-            position: { x: stepXs[index], y: anchor.y },
-          })
-        })
-        subgraphIndex[node.id] = { steps: stepIds }
-      }
 
       /**
-       * **模块笔记承载**（design D3）：一个模块一份骨架文档（真源 `blocks.items[].noteDoc`），
-       * 成员、步骤各写自己的小节；锚点 = 小节标题的 slug，而**小节标题就是节点标签本身**。
-       * 于是"补写笔记正文"不用改一行页面代码；反过来，谁把标题改坏了，自检打开文档时当场失败。
-       * 步骤的归属走真源成员表（`blockOfNode`），与它的父节点同属一个模块。
+       * **笔记承载：一个模块一篇、成员各占一节**（design D2 / D4）：成员指向
+       * `modules/<块>.md`，锚点 = 它那一节的标题，而那个标题就是节点标签本身——于是"补写笔记正文"
+       * 不用改一行页面代码；反过来，谁把标题改坏了，自检打开文档时当场失败。
        */
-      const noteDocOfBlock = new Map(blockItems.map((block) => [block.id, String(block.noteDoc ?? '')]))
       for (const [blockId, memberIds] of blockMembers) {
-        const docId = noteDocOfBlock.get(blockId) ?? ''
-        if (!docId) continue
         for (const memberId of memberIds) {
           const member = gNodes.find((node) => node.id === memberId)
-          if (member) member.refs = [...member.refs, noteRefOf(docId, member.label)]
+          if (member) member.refs = [...member.refs, noteRefOf(docPathOf(blockId), member.label)]
         }
-      }
-      for (const node of subgraphNodes) {
-        const docId = noteDocOfBlock.get(blockOfNode.get(node.parent)) ?? ''
-        if (docId) node.refs = [...node.refs, noteRefOf(docId, node.label)]
       }
 
       /**
-       * **引用汇总**（design D2）：
-       *   `refs(节点) = 去重排序( 自身引用 ∪ ⋃ refs(直接子节点) )`
-       *   `refs(块)   = 去重排序( 块自身引用 ∪ ⋃ refs(它的每个成员) )`
-       * 子节点用 `parent` 的反向表算——图上**没有子节点**的就是叶子（实测恰好是 21 个 `step:*`），
-       * 不另立"层级"概念。块**不**从 `parent` 取成员：成员归属的唯一来源是真源 `blocks.items[].members`。
-       * 记忆化递归（`rolled`）：同一处落点会被父与子同时引用，合并前先按去重键收成一份。
-       * **漏一层就会静默少显示**，所以自检要独立重算一遍双向对拍（多一条也失败）。
+       * **引用汇总**（design D2）：`refs(块) = 去重排序( 块自身那几条 ∪ ⋃ refs(它的每个成员) )`。
+       * 成员归属的唯一来源是真源 `blocks.items[].members`（块**不**从 `parent` 取成员）。
+       * 层的成员里有**文件名**（L1 的 16 个公共头文件）：它们不在图上、取不到引用，按空处理——
+       * 层那份整文件级落点已由上面的 `layerFileSites` 直接给出。
+       * 成员自己那份已经是"自己的核心行 ∪ 它全部实现步骤的核定落点 ∪ 自己那篇笔记"，往上只有块这一层，
+       * 所以这里只并块。去重与排序照 `canonicalRefs`（去重键不含 `label`：同一处落点只留一份）。
        */
-      const childIdsOf = new Map()
-      for (const node of [...gNodes, ...subgraphNodes]) {
-        if (!node.parent) continue
-        childIdsOf.set(node.parent, [...(childIdsOf.get(node.parent) ?? []), node.id])
-      }
-      const nodeById = new Map([...gNodes, ...subgraphNodes, ...blockNodes].map((node) => [node.id, node]))
-      const rolled = new Map()
-      const refsOf = (id) => {
-        if (rolled.has(id)) return rolled.get(id)
-        const own = nodeById.get(id)?.refs ?? []
-        const merged = canonicalRefs([own, ...(childIdsOf.get(id) ?? []).map((childId) => refsOf(childId))])
-        rolled.set(id, merged)
-        return merged
-      }
-      for (const node of [...gNodes, ...subgraphNodes]) node.refs = refsOf(node.id)
       for (const block of blockNodes) {
-        // 层的成员里有**文件名**（L1 的 16 个公共头文件）：它们不在图上、`rolled` 里没有，按空处理
         block.refs = canonicalRefs([
           block.refs,
-          ...(blockMembers.get(block.id) ?? []).map((memberId) => rolled.get(memberId) ?? []),
+          ...(blockMembers.get(block.id) ?? []).map(
+            (memberId) => gNodes.find((node) => node.id === memberId)?.refs ?? [],
+          ),
         ])
       }
+      /** 同一节点内部的重复仍要收成一份（块上那几条上面已去过重，这里是幂等的） */
+      for (const node of [...gNodes, ...blockNodes]) node.refs = canonicalRefs([node.refs])
 
       /**
        * （原「顶层流程 `stageEdges`」整段已退场：一级不再用"过程框之间的汇总边"。
@@ -1256,7 +1284,7 @@ async function main() {
           tags: tagRegistry,
           updatedAt: '',
         },
-        nodes: [...gNodes, ...blockNodes, ...subgraphNodes],
+        nodes: [...gNodes, ...blockNodes, ...segNodes],
         /**
          * 一级（主图）的边 = **20 条块间接口**（`iface:*`）：静息不画，悬浮两端任一块时才显现
          * （`focusOnly` 字段，）。`gEdges` 那 34 条"量 → 量"仍留在数据里：
@@ -1264,12 +1292,9 @@ async function main() {
          * 视图按 `parent` 聚焦，一级只看得到块。
          */
         edges: [...gEdges, ...interfaceEdges, ...feedbackEdges],
-        /** 子图索引：模块 id → 它内部的步骤（子节点 id 列表）。视图与自检都读它，不另算 */
-        subgraphs: subgraphIndex,
         /**
-         * **块（一级的 10 个过程块 + 2 个层）**：一级划分的事实全在这一处，视图与自检都读它、不各自重算。
-         *   · `members`：那 28 个物理量（不重不漏，自检逐块核）；层（`kind:'layer'`）的成员是**文件**
-         *     （L1 是公共头文件），不算物理量，所以层不参与"28 个对象"的覆盖核对；
+         * **块（一级的 10 个过程块 + 1 个层）**：一级划分的事实全在这一处，视图与自检都读它、不各自重算。
+         *   · `members`：那 39 个物理量（不重不漏，自检逐块核）；层的成员（`tgamma`）也是物理量，照常计入；
          *   · `enterable`：`kind === 'process'` 才可进入；层不可进入（进去没有子图）；
          *   · `codeAnchor`：`.c` + `Compute*` + 盒子结构名，自检逐条断言真实存在；
          *   · `interfaceIn` / `interfaceOut`：对外接口是哪几条 `iface:*`（**只供自检**核对
@@ -1282,6 +1307,9 @@ async function main() {
             label: node.label,
             kind: node.blockKind,
             order: node.order,
+            /** 段与红移内步序：与块节点上那两份是同一份事实的两个出口（视图读节点、自检读这里） */
+            phase: node.phase,
+            flowStep: node.flowStep,
             codeAnchor: node.codeAnchor,
             note: node.summary,
             members: blockMembers.get(node.id) ?? [],
@@ -1300,8 +1328,9 @@ async function main() {
             tags: node.tags,
             position: node.position,
             /**
-             * 汇总后的引用（代码 + 笔记）。与块节点上那份是**同一份事实的两个出口**
-             * （视图读节点、自检读这里），口径同 `stages` / `tags`：块不自造，全部由成员汇总而来。
+             * 块自己的引用（代码 + 笔记）。与块节点上那份是**同一份事实的两个出口**（视图读节点、自检读这里）。
+             * 与 `stages` / `tags` 不同：那两样是成员的并集，引用**不是**——块的证据是它那篇 md，
+             * 成员各自的落点各归各。
              */
             refs: node.refs,
             interfaceIn: interfaceEdges.filter((edge) => edge.target === node.id).map((edge) => edge.id),
@@ -1316,7 +1345,7 @@ async function main() {
             layerBlocks: blockNodes.filter((node) => node.blockKind === 'layer').length,
             /** 物理量成员数（= 真源 nodes + drivers 的总数，不重不漏） */
             members: blockNodes.reduce((sum, node) => sum + node.quantityMemberCount, 0),
-            /** 文件成员数（层的成员：L1 的公共头文件） */
+            /** 文件成员数（成员里不是物理量的那些：层不再挂文件，所以恒为 0） */
             fileMembers: blockNodes.reduce((sum, node) => sum + (node.memberCount - node.quantityMemberCount), 0),
             interfaceEdges: interfaceEdges.length,
           },
@@ -1325,7 +1354,6 @@ async function main() {
          * 骨干树 + 交叉边的分类（视图与自检都读它）：`levels` 是层号，`parentOf` 是主父表，
          * 后面五个名单把每条非骨干边按成因归位 —— 「为什么会出现跨层」在数据里就有答案。
          */
-        crossLevel,
       }
     })(),
     /** 参数 × 节点／边 的查表（后端算好，视图直接读） */
@@ -1354,6 +1382,12 @@ async function main() {
   artifact.stats.codeSites = [
     ...new Set([...artifact.drivers, ...artifact.nodes].flatMap((item) => item.code.sites.map((site) => `${site.file}:${site.line}`))),
   ].length
+  /** 落点来源与"待补"：真源核定的条数、atlas 回落的条数、待核定核心行的单元数（生成日志与自检都读这一处） */
+  const allSites = [...artifact.drivers, ...artifact.nodes].flatMap((item) => item.code.sites)
+  artifact.stats.codeSitesFromChain = allSites.filter((site) => site.source === 'chain').length
+  artifact.stats.codeSitesPending = [...artifact.drivers, ...artifact.nodes].flatMap((item) => item.code.pending ?? []).length
+  /** atlas 找不到函数体的单元（步骤节点因此没有核心行）：清单进产物，"待补"不许只留在生成日志里 */
+  artifact.stats.pendingUnits = siteStats.pending
 
   const shapeProblems = assertShape(artifact)
   if (shapeProblems.length) {
@@ -1372,19 +1406,24 @@ async function main() {
   say('物理链 · 生成')
   say(`  驱动量 ${artifact.stats.drivers} · 物理量 ${artifact.stats.nodes} · 依赖边 ${artifact.stats.edges} · 简并 ${artifact.stats.degeneracies}`)
   say(`  参数 ${artifact.stats.params}（${Object.entries(groups).map(([name, list]) => `${name} ${list.length}`).join(' / ')}）`)
-  say(`  代码落点 ${artifact.stats.codeSites} 处（按函数体定位的单元 ${siteStats.located}，整文件 ${siteStats.fileWide}，未定位 ${siteStats.missed.length}）`)
-  const cross = artifact.graph.crossLevel
   say(
-    `  骨干树 ${cross.stats.backbone} 条（层差恒 1，每个量恰一个父）· 交叉边 ${cross.stats.sibling + cross.stats.coarse + cross.stats.bypass + cross.stats.gap} 条` +
-      `（同级多父 ${cross.stats.sibling} / 更细链条已蕴含 ${cross.stats.coarse} / 旁路诊断 ${cross.stats.bypass} / 缺中间量 ${cross.stats.gap}）`,
+    `  代码落点 ${artifact.stats.codeSites} 处（真源核定 ${artifact.stats.codeSitesFromChain}，atlas 回落 ${allSites.length - artifact.stats.codeSitesFromChain}` +
+      `；atlas 定位到函数体的单元 ${siteStats.located}，待核定核心行 ${siteStats.pending.length}，读不到文件 ${siteStats.missed.length}）`,
   )
-  if (cross.stats.gap) say(`  ⚠ 缺中间量的跨层边（待补，不许静默）：${cross.gap.join('、')}`)
+  if (siteStats.pending.length) {
+    say(`  ⚠ atlas 找不到函数体、待核定核心行（不许静默）：${siteStats.pending.map((item) => `${item.unit}（${item.file}）`).join('、')}`)
+  }
+  say(
+    `  块间交付边 ${(artifact.graph?.edges ?? []).filter((edge) => edge.focusOnly).length} 条 ·` +
+      ` 跨红移回流 ${(artifact.graph?.edges ?? []).filter((edge) => edge.kind === 'feedback').length} 条`,
+  )
   say(`  戳记 ${artifact.stamp}`)
 
   if (flag('stdout')) {
     process.stdout.write(`${JSON.stringify(artifact, null, 2)}\n`)
     return
   }
+
   if (flag('dry-run')) {
     say('  （dry-run：没有写文件）')
     return
@@ -1395,12 +1434,13 @@ async function main() {
   const payload = `${JSON.stringify(artifact, null, 2)}\n`
   if (before === payload) {
     console.log('  产物无变化（幂等）')
-    return
+  } else {
+    if (before) await fs.writeFile(`${OUT_FILE}.bak`, before, 'utf8')
+    await fs.writeFile(`${OUT_FILE}.tmp`, payload, 'utf8')
+    await fs.rename(`${OUT_FILE}.tmp`, OUT_FILE)
+    console.log(`  已写入 ${path.relative(path.join(HERE, '..'), OUT_FILE)}${before ? '（旧版留在 .bak）' : ''}`)
   }
-  if (before) await fs.writeFile(`${OUT_FILE}.bak`, before, 'utf8')
-  await fs.writeFile(`${OUT_FILE}.tmp`, payload, 'utf8')
-  await fs.rename(`${OUT_FILE}.tmp`, OUT_FILE)
-  console.log(`  已写入 ${path.relative(path.join(HERE, '..'), OUT_FILE)}${before ? '（旧版留在 .bak）' : ''}`)
+
 }
 
 await main()

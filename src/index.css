@@ -147,6 +147,35 @@
     font-family: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, monospace;
     font-size: 0.86em;
   }
+
+  /*
+   * 检查器的摘要位置也渲染公式（`.formula-block`，见 `Formula.tsx`）：那里是**一栏里的一条**，
+   * 不像文档正文那样自成段落——上下不留 KaTeX 默认的 1em 间距（栏内本来就靠 flex gap 分隔），
+   * 坏公式的降级样式与阅读器保持同一套。
+   */
+  .formula-block .katex {
+    font-size: 1.04em;
+    line-height: 1.2;
+  }
+
+  .formula-block .katex-display {
+    margin: 0;
+    padding: 2px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .formula-block .katex-display > .katex {
+    white-space: nowrap;
+  }
+
+  .formula-block .katex-error {
+    padding: 0 3px;
+    border-radius: 4px;
+    background: rgb(248 113 113 / 0.12);
+    font-family: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, monospace;
+    font-size: 0.86em;
+  }
 }
 
 @layer utilities {

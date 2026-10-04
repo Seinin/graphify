@@ -1,4 +1,5 @@
 import type {
+  ChainLayout,
   CodeFile,
   CodeWindow,
   Graph,
@@ -8,6 +9,7 @@ import type {
   ImportPreview,
   MdDoc,
   MdDocContent,
+  NodePosition,
   TagDefinition,
 } from '../lib/types'
 
@@ -163,6 +165,20 @@ export const api = {
   deleteTag: (id: string) =>
     request<{ graph: Graph; removedTag: TagDefinition }>(`/graph/tags/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    }),
+
+  // ---------- 物理链页的手动摆放 ----------
+  /**
+   * 读物理链页记下的手摆坐标（缺文件时回空的一份）。
+   *
+   * 与 `/graph` 那一组分开：这一页的数据来自生成物，服务端只为它存"谁摆在哪儿"。
+   */
+  getChainLayout: () => request<{ layout: ChainLayout }>('/chain-layout'),
+  /** 整份替换手摆坐标；交空对象 = 清掉覆盖层（恢复生成物默认摆位） */
+  saveChainLayout: (positions: Record<string, NodePosition>) =>
+    request<{ layout: ChainLayout; updated: number; skipped: string[] }>('/chain-layout', {
+      method: 'PUT',
+      body: { positions },
     }),
 
   // ---------- 版本 ----------

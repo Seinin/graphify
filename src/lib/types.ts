@@ -30,12 +30,16 @@ export type NodeType =
   | 'function'
   | 'engineering'
   /**
-   * 物理链的**块**（一级那 12 个块 = 10 个天体物理过程 + 2 个层）：`type = 'process'` 的**普通**节点，
+   * 物理链的**块**（一级那 11 个块 = 10 个天体物理过程 + 1 个层）：`type = 'process'` 的**普通**节点，
    * 不是容器——块的成员挂在它的 `parent` 下，只在块自己的子图里出现。
    * 与 `method`（"函数/过程"，代码侧的一个函数）区分开：这里是"天体物理上的一站"。
    */
   | 'process'
-  /** 大框：装饰容器（compound 父节点），子节点直接画在框里。只作分组，不参与语义 */
+  /**
+   * 大框：装饰容器（compound 父节点），子节点直接画在框里。只作分组，不参与语义。
+   * 物理链页一级的**段容器**（`seg:*`）走的也是这一类：全站只有这一种"框住一批东西"的类型，
+   * 画布页的层带与链页的段因此同色、同口径（见 `graphify-physics-chain` 的「段是容器」）。
+   */
   | 'group'
 
 /** 箭头吸附端口 = 方框的四条边中点；null / 缺省表示「自动吸到最近的边」 */
@@ -156,7 +160,8 @@ export interface TagDefinition {
   /**
    * 分类（可选）：参照代码里的参数划分（inputs.py 的 InputStruct 子类名，如 SimulationOptions）。
    * 顶栏参数弹层按它分组；**右侧属性面板按它上色**（见 `graph/palette.ts` 的 `TAG_GROUP_COLORS`）；
-   * 为空归入「未分类」，用中性灰兜底。
+   * 不是模型参数的代码名（如分析侧自选的 `K_TARGET`）归「非模型参数」；为空归入「未分类」。
+   * 后两者都不在配色表里，用中性灰兜底。
    */
   group?: string
   /** 标签对应的 notes 文档（相对 docs/notes 的路径）：点标签即打开它。每个标签都必须有一篇 */
@@ -194,11 +199,31 @@ export interface NodePosition {
   y: number
 }
 
+/**
+ * 物理链页的**手动摆放**（`data/chain-layout.json`）：节点 id → 坐标覆盖层。
+ *
+ * 只存位置：这一页的数据由生成物驱动，本机能改的就是"谁摆在哪儿"。
+ * `updatedAt` 为 null 表示这份覆盖层还没写过（页面照生成物烘好的默认摆位显示）。
+ */
+export interface ChainLayout {
+  graph: string
+  updatedAt: string | null
+  positions: Record<string, NodePosition>
+}
+
 export interface GraphNode {
   id: string
   label: string
   type: NodeType
   summary: string
+  /**
+   * **摘要位置的公式**：排版的 LaTeX（如 `\dot\rho_\star=…`），逐字来自真源 `docText[id].formula`。
+   *
+   * 与 `summary` 的分工：`summary` 仍是一句话 / 纯文本（检索命中说明读它）；这个字段是**排过版的数学**。
+   * 只有物理链页**带公式的对象**（真源里恰好每个成员一条：34 个节点 + 5 个驱动量）带它，
+   * 画布页的数据里没有这个字段——检查器见到它就渲染公式、不再出输入框（见 `Inspector`）。
+   */
+  formula?: string
   /**
    * 全局**标签 id** 列表（不是自由文本）——id 必须存在于 `meta.tags` 注册表，改名不动归属。
    * 编辑入口是注册表多选（见 Inspector），自由文本输入已移除。
@@ -232,6 +257,12 @@ export interface GraphNode {
    * 属性页拿它回答"这个量算在哪段代码里"；驱动量 / 外部量不属于任何阶段 → 空串。
    */
   stage?: string
+  /**
+   * **段名**（`layer` 层 / `prep` 红移循环前 / `loop` 逐红移循环）：
+   * 只有**块**与**段容器**带它。段的从属由**包含**表达（块装在段容器里），这个字段留在数据里
+   * 供离线工具与自检按段说话——视图不读它（`check:chain` 的段内计数正是按它重算的）。
+   */
+  phase?: string
   /** 块节点（`type: 'process'`）上那份"成员涉及哪几段代码"的并集（量各自的在 `stage` 上） */
   stages?: string[]
   /**
@@ -259,8 +290,8 @@ export interface GraphNode {
    */
   feedbackOutputOf?: string[]
   /**
-   * 块节点是否可进入子图。`false` = 「层」（L0 常数与网格层 / L1 共享内核层：横切各块，
-   * 没有一条属于自己的主序流，L1 的成员还是头文件、根本不在图上）：
+   * 块节点是否可进入子图。`false` = 「层」（常数与网格：
+   * 没有一条属于自己的主序流，它的成员是常数、进不出什么东西来）：
    * 画布不挂"可进入"的信号（光晕 / 呼吸 / 双击进入），属性页也不给「进入子图 ↗」。
    * 其它节点不写这个字段（按可进入处理）。
    */
@@ -284,36 +315,23 @@ export interface GraphEdge {
    * 打开后连线走虚线，与按关系类型（relates_to）自带的虚线是两回事。
    */
   conditional?: boolean
-  /**
-   * 跨了几层：`源层号 − 目标层号`。
-   *
-   * 由 `scripts/build-physics-chain.mjs` 按**最长路径分层**算出并写进产物（只有物理链页有这两个字段，
-   * 工程图谱 `data/graph.json` 里没有）。层差 = 1 是骨干树（每个量一个主父，结构上不跨层）；
-   * 层差 > 1 就是**跨层捷径**，锚点见 `spanKind`；**层差为负是跨红移回流**（下一轮指回上一轮，
-   * 与自上而下的主序反向，锚点同样在 `spanKind`）。
-   */
-  levelSpan?: number
-  /** 这条边是不是骨干树上的边（每个量恰好一条骨干出边；骨干边层差恒为 1） */
-  backbone?: boolean
-  /** 不是骨干边（= 交叉边）；视图按它把线画成点线弧线，与骨干区分开 */
+  /** 块间交付边（走总线的那一档）：视图按它把线画成折线，与子图里的直连区分开 */
   crossLink?: boolean
   /**
-   * 跨层成因（判据全在生成器里按数据判，不猜）：
-   *   · `sibling`：层差 1 的第二个父（多父的直接后果，不算跨层）；
-   *   · `coarse`：层差 >1 且存在间接路径 —— 这条直连依赖已被更细的链条蕴含（汇总边）；
-   *   · `bypass`：层差 >1、无间接路径，但目标是 S04 旁路/诊断出口（诊断量本来就不在主链上）；
-   *   · `gap`：层差 >1、无间接路径、也不是旁路 —— **链条上缺了中间量**，生成器和自检都会点名列出；
-   *   · `feedback`：**跨红移回流**（层差为负、两端皆为一级块）—— 它是跨迭代的回声，不是同一轮内的主序依赖，
-   *     因此与上面三种跨层捷径分属两个视图面。
+   * 回流的种类标记（生成器与视图同读这一份）：
+   *   · `feedback`：一级上那条**块间回流弧**（上一轮指回下一轮那一步，与主序反向）；
    *   · `feedback-input`：**回流在子图里的落点**（`fromNode → toNode` 那条成员级输入边）。
    *     它**不在产物里**：由物理链页按产物那条块间弧派生（见 `subgraphOf`），在**弧两端块**的标签页里各显形一次
    *     ——收方块那侧讲"我读进来的"，来源块那侧讲"我送出去的"。
+   *
+   * 分层模型（层差 / 骨干树 / 跨层成因）整体退场后，**`kind` 是这一族里唯一的标记**：
+   * "跨了几步"不再由数据说，而由几何（道深）说。
    */
-  spanKind?: 'sibling' | 'coarse' | 'bypass' | 'gap' | 'feedback' | 'feedback-input'
+  kind?: 'feedback' | 'feedback-input'
   /**
    * 跨红移回流记的两端量（只有回流边有）：`fromNode` 是**上一轮**送出去的那个量，`toNode` 是这一步真正读它的量。
    * 主图上的弧记的是两端**块**（`source` / `target`）；进到子图里这条关系落在**成员级**，
-   * 视图据这两个字段派生一条 `fromNode → toNode` 的输入边（`spanKind: 'feedback-input'`）。
+   * 视图据这两个字段派生一条 `fromNode → toNode` 的输入边（`kind: 'feedback-input'`）。
    */
   fromNode?: string
   toNode?: string
@@ -531,8 +549,8 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
   tool: '#DB2777',
   // 物理链：物理量（琥珀）/ 功率谱（品红）/ 函数关系（橙）/ 工程与装配（中性灰，表示"不属于物理链"）
   /**
-   * 块借**容器墨绿**（与 `group` 同色）：两者都是"框住一批东西"的角色，且永不共处一张图——
-   * 画布那张图没有 `process` 节点，物理链这张图没有 `group` 节点，图例里不会出现两个同色的种类。
+   * 块取**容器墨绿**：段容器是淡底的框（填充 0.05、压在最底），块是画在框里的实体（填充 0.16）——
+   * 同一色相靠填充深浅分开，与画布页"层带 + 框内节点"同一套读法（见 `palette.ts` 的大框底色）。
    */
   process: '#0F766E',
   quantity: '#B45309',

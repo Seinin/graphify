@@ -413,8 +413,8 @@
 ### S07.1.3 power_in_k
 - **所属子过程**：[S07.1 线性功率谱的构造](L2-subprocesses.md#s071-线性功率谱的构造)
 - **作用与意义**：承担线性功率谱的最终形态：抑制项是否乘入在这里决定。
-- **承担者**：`cosmology.c` 的 `power_in_k`、`power_in_k_cdm`、`power_in_vcb`（[源码](../../../src/py21cmfast/src/cosmology.c)）
-- **关键过程**：原始曲率谱 × 传输函数² × 归一化；模糊暗物质抑制在此乘入。
+- **承担者**：`cosmology.c` 的 `power_in_k`、`power_in_k_cdm`、`power_in_vcb` 与原始曲率谱 `primordial_curvature_power_spectrum`（[源码](../../../src/py21cmfast/src/cosmology.c)）
+- **关键过程**：原始曲率谱 × 传输函数² × 归一化；模糊暗物质抑制在此乘入。原始曲率谱的谱指数与归一化读在 `primordial_curvature_power_spectrum` 里。
 - **下一层**：见 [L4 · S07.1.3](L4-key-processes.md#s0713-a-关键过程与关键量)
 
 ### S07.2 增长因子与时间距离量
@@ -423,7 +423,7 @@
 ### S07.2.1 dicke
 - **所属子过程**：[S07.2 增长因子与时间距离量](L2-subprocesses.md#s072-增长因子与时间距离量)
 - **作用与意义**：承担时间与距离的换算：把场推到某个红移、把晕位移多少都依赖它。
-- **承担者**：`cosmology.c` 的 `dicke` 与同族的增长率、哈勃率、时间/距离换算函数（[源码](../../../src/py21cmfast/src/cosmology.c)）
+- **承担者**：`cosmology.c` 的增长率族 `dicke`、`ddicke_dz`、`ddickedt`，哈勃率族 `omega_mz`、`hubble`、`t_hubble`，时间/距离换算 `dtdz`、`drdz`（[源码](../../../src/py21cmfast/src/cosmology.c)）
 - **关键过程**：线性增长因子及其随红移的导数与积分量。
 - **下一层**：见 [L4 · S07.2.1](L4-key-processes.md#s0721-a-关键过程与关键量)
 
