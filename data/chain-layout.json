@@ -1,0 +1,182 @@
+{
+  "graph": "physics-chain",
+  "updatedAt": "2026-10-04T16:47:59.278Z",
+  "positions": {
+    "block:halocat": {
+      "x": 188,
+      "y": 53
+    },
+    "block:initial": {
+      "x": -192,
+      "y": 56
+    },
+    "block:cosmo": {
+      "x": -246,
+      "y": 187
+    },
+    "block:grav": {
+      "x": 85,
+      "y": 157
+    },
+    "seg:loop": {
+      "x": 2,
+      "y": 413
+    },
+    "block:halobox": {
+      "x": -242,
+      "y": 328
+    },
+    "block:xray": {
+      "x": -274,
+      "y": 493
+    },
+    "block:thermal": {
+      "x": 13,
+      "y": 498
+    },
+    "block:ionization": {
+      "x": 283,
+      "y": 348
+    },
+    "block:obs": {
+      "x": 288,
+      "y": 498
+    },
+    "seg:prep": {
+      "x": 19,
+      "y": 120
+    },
+    "block:galaxy": {
+      "x": 308,
+      "y": 183
+    },
+    "scaling_relations": {
+      "x": 6,
+      "y": 225
+    },
+    "rho_star": {
+      "x": -367,
+      "y": 87
+    },
+    "dn_dm": {
+      "x": -126,
+      "y": 30
+    },
+    "lx": {
+      "x": -121,
+      "y": 310
+    },
+    "fstar": {
+      "x": 410,
+      "y": 323
+    },
+    "mmin": {
+      "x": 152,
+      "y": 85
+    },
+    "phi_uv": {
+      "x": 343,
+      "y": 199
+    },
+    "q_hii": {
+      "x": 422,
+      "y": 93
+    },
+    "recomb": {
+      "x": 250,
+      "y": 254
+    },
+    "nion": {
+      "x": 774,
+      "y": 63
+    },
+    "perturb_field": {
+      "x": 33,
+      "y": 156
+    },
+    "vcb": {
+      "x": 80,
+      "y": -2
+    },
+    "block:const": {
+      "x": -150,
+      "y": -52
+    },
+    "gamma_12": {
+      "x": 2,
+      "y": 270
+    },
+    "mfp": {
+      "x": 500,
+      "y": 253
+    },
+    "ts": {
+      "x": 610,
+      "y": 176
+    },
+    "zeta": {
+      "x": 460,
+      "y": 418
+    },
+    "source_grid": {
+      "x": 110,
+      "y": 424
+    },
+    "jalpha": {
+      "x": 279,
+      "y": 215
+    },
+    "filtered_xray": {
+      "x": -227,
+      "y": 411
+    },
+    "tk": {
+      "x": 456,
+      "y": 16
+    },
+    "tgamma": {
+      "x": 179,
+      "y": 174
+    },
+    "xc": {
+      "x": 309,
+      "y": 433
+    },
+    "xalpha": {
+      "x": 248,
+      "y": 358
+    },
+    "matter_power": {
+      "x": -205,
+      "y": -8
+    },
+    "hmf_impl": {
+      "x": -104,
+      "y": 184
+    },
+    "initial_density": {
+      "x": -55,
+      "y": 93
+    },
+    "tvir_min": {
+      "x": 174,
+      "y": 182
+    },
+    "transfer_fn": {
+      "x": 195,
+      "y": 150
+    },
+    "z_reion": {
+      "x": 748,
+      "y": 262
+    },
+    "filtered_sfr": {
+      "x": -248,
+      "y": 322
+    },
+    "second_order_velocity": {
+      "x": -242,
+      "y": 211
+    }
+  }
+}
