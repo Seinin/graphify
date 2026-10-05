@@ -157,7 +157,9 @@ async function buildCodeSites(paramNames, stepSites = {}) {
      * 而不是该子过程的前 8 个。**三个键缺一不可**——2026-10-01 之前只挂了前两个，
      * 于是 4 个盒子产物（`matter_power` / `vcb` / `perturb_field` / `filtered_xray`）
      * 那几条**故意写成三段单元码**的 hint 一个都查不到，`refs` 空着（`algorithmPending` 里那批）。
-     * 注意：`paramHints` 只挂阶段与子过程两个键（参数归属的口径不跟着改，避免一次动两处口径）。
+     * **参数归属与落点用同一套键**：两级时，凡是把锚点写成三段单元码的量在矩阵里永远查不到参数
+     * ——落点对得上、归属全空（`filtered_xray` 的 `S14.3.1` 那 10 个量就是这批）。
+     * 两条路读同一份 `codeHints`，键的粒度就必须一致，否则真源写得越细、归属越是空的。
      */
     for (const key of new Set([stageCode, subprocess.code, unit.code])) {
       byStage.set(key, [...(byStage.get(key) ?? []), ...entries])
@@ -185,7 +187,7 @@ async function buildCodeSites(paramNames, stepSites = {}) {
             ? body.includes(`->${name}`) || body.includes(`.${name}`) || body.includes(`"${name}"`) || body.includes(`'${name}'`)
             : body.includes(`->${name}`) || body.includes(`.${name}`)
           if (!read) continue
-          for (const key of new Set([stageCode, subprocess.code])) {
+          for (const key of new Set([stageCode, subprocess.code, unit.code])) {
             if (!paramHints.has(key)) paramHints.set(key, new Set())
             paramHints.get(key).add(name)
           }

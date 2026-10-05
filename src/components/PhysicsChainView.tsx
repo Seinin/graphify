@@ -593,7 +593,8 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
   /**
    * 两条面**互相查找**：
    *   · `litProcessIds`：选中参数时，过程面里"下辖的量被它碰到"的那些行点亮；
-   *   · `litParamNames`：选中过程时，参数面里"作用于它下辖量"的那些行点亮。
+   *   · `litParamNames`：选中过程时，参数面里"作用于它下辖量"的那些行点亮；
+   *     过程词条展开后「参数」那一栏（`ChainProcessEntry.relatedParams`）铺的就是这同一个名单。
    * 两个名单都由既有的「参数 × 节点矩阵」+ 过程面的成员算出来，**不新增归属数据**；
    * 判据取 `paramTouchedNodes`（矩阵落点 + 门控边两端）——与 `paramsOfProcess` 同源，两个方向才对得上。
    */
@@ -633,6 +634,12 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
   const jumpToProcess = (id: string) => {
     setPanelTab('processes')
     if (activeProcess !== id) showProcess(id)
+  }
+
+  /** 反过来：从过程词条展开的「参数」那一栏跳过去——切到参数面并选中那个参数（两颗 chip 一正一反） */
+  const jumpToParam = (name: string) => {
+    setPanelTab('params')
+    if (activeParam !== name) showParam(name)
   }
 
   /**
@@ -731,6 +738,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
         activeParam={activeParam}
         activeParamEffect={activeParamEffect}
         onSelectParam={showParam}
+        onJumpToParam={jumpToParam}
         activeProcess={activeProcess}
         onSelectProcess={jumpToProcess}
         litProcessIds={litProcessIds}

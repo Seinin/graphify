@@ -650,7 +650,8 @@ export const paramsOfProcess = (processId: string): string[] => {
 }
 
 /**
- * 过程面的**词条**（左栏直接渲染的一行）：过程名 + 下辖量数 + 论文出处数 + 相关参数数 + 拟合律口径。
+ * 过程面的**词条**（左栏直接渲染的一行）：过程名 + 下辖量数 + 论文出处数 + 相关参数数 + 拟合律口径
+ * ＋展开后那一栏相关参数（口径见 `relatedParams`）。
  * 三个数字都在这里数好，面板只管显示（它与 `ChainParamEntry` 是同一种东西的两个出口）。
  *
  * **故意不带主块的显示名**：词条上只出现过程名，不出现 `M8 气体热与自旋温度` 这类代码模块块名
@@ -672,6 +673,14 @@ export interface ChainProcessEntry {
   note?: string
   /** 下辖量的清单（词条展开时列出来；点每一项定位到那个量） */
   members: { id: string; label: string }[]
+  /**
+   * 与它相关的参数（词条展开时与「物理量」分两栏列出；点每一项切到参数面并选中）。
+   *
+   * **现算，不是第二份归属表**：口径与参数面**同一份**（`paramsOfProcess` → `paramTouchedNodes`
+   * → `paramMatrix`），所以这里列出的就是参数面里"作用于这条过程的量"的那些行——两个方向对得上。
+   * 量与参数是两回事：量是这条过程算出来的产物，参数是拧它的旋钮，所以分栏列、不混在一起。
+   */
+  relatedParams: { name: string; group: string }[]
 }
 
 /** 量的显示名：读生成物里那份与画布同形状的图（`ChainNode` 上没有 `label`，只有符号与名字） */
@@ -699,6 +708,10 @@ export const chainProcessEntries = (): ChainProcessEntry[] =>
     fit: item.fit,
     note: item.note,
     members: item.members.map((id) => ({ id, label: labelOfGraphNode(id) })),
+    /* 按名字排：与参数面那些行的顺序一致（`paramEntries` 也是按名字排），两处翻同一批参数不跳序 */
+    relatedParams: paramsOfProcess(item.id)
+      .map((name) => ({ name, group: paramEntryOf(name)?.group ?? PARAM_GROUP_FALLBACK }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   }))
 
 /* ============ 四路检索：参数 / 物理量 / 过程名 / 论文出处 ============ */

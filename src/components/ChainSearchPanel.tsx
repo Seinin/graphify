@@ -11,7 +11,7 @@
  *   2. **四路检索**（参数 / 物理量 / 过程 / 文献）按类分组、给出计数，键盘 ↑↓ 走、Enter 定位、Esc 清空。
  *      有检索词时结果**跨两条面**（页签不影响检索结果）；
  *   3. 两条面**互相查找**：选中参数，脚上写"它落在哪些过程下"（点了切到过程面并选中）；
- *      选中过程，参数面里相关的那些行同时点亮。
+ *      选中过程，词条展开成「物理量 / 参数」两栏——参数面里相关的那几行同时点亮，参数栏里点一个就切过去。
  *
  * 这是个**纯入参组件**：它是本页的视图，不读数据层、不碰选中状态，检索结果与词条分组都由页面算好递进来。
  */
@@ -50,7 +50,11 @@ export type ChainPanelTab = 'params' | 'processes'
 
 const PANEL_TABS: { id: ChainPanelTab; label: string; hint: string }[] = [
   { id: 'params', label: '参数', hint: '按代码里的类名分组（AstroParams / CosmoParams / AstroOptions…）' },
-  { id: 'processes', label: '天体物理过程', hint: '按论文等式划分的那条旧轴：一个过程 = 一组按等式串起来的量' },
+  {
+    id: 'processes',
+    label: '天体物理过程',
+    hint: '按论文等式划分的那条旧轴：一个过程 = 一组按等式串起来的量；点开还列出拧它的那些参数（口径与参数面同一份）',
+  },
 ]
 
 /**
@@ -139,6 +143,11 @@ interface ChainSearchPanelProps {
   activeParam: string | null
   activeParamEffect: ChainParamEffect | null
   onSelectParam: (name: string) => void
+  /**
+   * 点过程词条展开出来的**参数**那一栏：切到参数面并选中它。
+   * 与脚上区那颗「属于」正好反向（那颗从参数面切到过程面），两颗都跨面，所以别合并成一个回调。
+   */
+  onJumpToParam: (name: string) => void
   /** 当前选中的过程（高亮那一行、展开它的成员） */
   activeProcess: string | null
   onSelectProcess: (processId: string) => void
@@ -169,6 +178,7 @@ export function ChainSearchPanel({
   activeParam,
   activeParamEffect,
   onSelectParam,
+  onJumpToParam,
   activeProcess,
   onSelectProcess,
   litProcessIds,
@@ -259,7 +269,8 @@ export function ChainSearchPanel({
 
   /**
    * 过程词条的一行（主清单与兜底小节渲染的是同一种行：交互必须是同一套）。
-   * 点它＝定位到主块并选中；选中时把下辖的量铺开，每一项可点、点了定位到那个量。
+   * 点它＝定位到主块并选中；选中时展开成**两栏：物理量 + 参数**，各带副标题——
+   * 两者不是一回事：量是这条过程算出来的产物（点它定位到那个量），参数是拧它的旋钮（点它切到参数面并选中）。
    * 词条上只写过程名：**不出现 `M8 气体热与自旋温度` 这类代码模块块名**（过程面不是一级轴，
    * 点到哪儿由 `primaryBlock` 决定，落到画布上自然看得见），计数与拟合律口径也不印在行上（退到悬停提示）。
    */
@@ -282,18 +293,55 @@ export function ChainSearchPanel({
           </span>
         </button>
         {active ? (
-          <div className="flex flex-wrap gap-1 px-2 pb-2 pt-1">
-            {entry.members.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => onRevealNode(member.id)}
-                title={`定位到 ${member.label}`}
-                className="cursor-pointer rounded border border-black/[0.08] px-1.5 py-0.5 text-micro text-foreground/85 transition-colors hover:border-primary/50 hover:text-primary"
-              >
-                {member.label}
-              </button>
-            ))}
+          /*
+           * 展开成两栏，各带副标题（量与参数是两回事，混在一排会读成同一类东西）：
+           *   · 物理量：这条过程下辖的量，点它定位到那个量；
+           *   · 参数：拧这条过程的旋钮，点它切到参数面并选中那一个。
+           * 参数那一栏的口径与参数面**同一份**（`relatedParams` 就是 `paramsOfProcess` 的结果），
+           * 所以这里列出的参数，与切过去之后被点亮的那几行是同一批。
+           * 两栏都可能为空，都写出「无」（规格：反查可能为空 → 显式写「无」，不许静默空着）。
+           */
+          <div className="flex flex-col gap-2 px-2 pb-2 pt-1.5">
+            <div className="flex flex-col gap-1">
+              <span className="text-micro text-muted-foreground/70">物理量</span>
+              <div className="flex flex-wrap gap-1">
+                {entry.members.length ? (
+                  entry.members.map((member) => (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => onRevealNode(member.id)}
+                      title={`定位到 ${member.label}`}
+                      className="cursor-pointer rounded border border-black/[0.08] px-1.5 py-0.5 text-micro text-foreground/85 transition-colors hover:border-primary/50 hover:text-primary"
+                    >
+                      {member.label}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-micro text-muted-foreground/70">无</span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-micro text-muted-foreground/70">参数</span>
+              <div className="flex flex-wrap gap-1">
+                {entry.relatedParams.length ? (
+                  entry.relatedParams.map((param) => (
+                    <button
+                      key={param.name}
+                      type="button"
+                      onClick={() => onJumpToParam(param.name)}
+                      title={`切到参数面并选中 ${param.name}（${param.group}）`}
+                      className="cursor-pointer rounded border border-primary/30 bg-primary/8 px-1.5 py-0.5 font-mono text-micro text-primary transition-colors hover:border-primary/60"
+                    >
+                      {param.name}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-micro text-muted-foreground/70">无</span>
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
       </div>

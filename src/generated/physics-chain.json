@@ -7803,8 +7803,42 @@
         "parent": "block:xray",
         "observable": false,
         "topics": [],
-        "tags": [],
-        "tagDetails": {},
+        "tags": [
+          "tag:N_STEP_TS",
+          "tag:USE_MINI_HALOS"
+        ],
+        "tagDetails": {
+          "tag:N_STEP_TS": [
+            {
+              "label": "N_STEP_TS",
+              "kind": "数值",
+              "note": "数值：自旋温度壳层数",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ],
+          "tag:USE_MINI_HALOS": [
+            {
+              "label": "USE_MINI_HALOS",
+              "kind": "开关",
+              "note": "效应开关：要不要考虑迷你晕（Pop III）",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ]
+        },
         "refs": [
           {
             "docId": "",
@@ -8043,8 +8077,42 @@
         "parent": "block:xray",
         "observable": false,
         "topics": [],
-        "tags": [],
-        "tagDetails": {},
+        "tags": [
+          "tag:N_STEP_TS",
+          "tag:USE_MINI_HALOS"
+        ],
+        "tagDetails": {
+          "tag:N_STEP_TS": [
+            {
+              "label": "N_STEP_TS",
+              "kind": "数值",
+              "note": "数值：自旋温度壳层数",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ],
+          "tag:USE_MINI_HALOS": [
+            {
+              "label": "USE_MINI_HALOS",
+              "kind": "开关",
+              "note": "效应开关：要不要考虑迷你晕（Pop III）",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ]
+        },
         "refs": [
           {
             "docId": "",
@@ -8079,8 +8147,42 @@
         "parent": "block:xray",
         "observable": false,
         "topics": [],
-        "tags": [],
-        "tagDetails": {},
+        "tags": [
+          "tag:N_STEP_TS",
+          "tag:USE_MINI_HALOS"
+        ],
+        "tagDetails": {
+          "tag:N_STEP_TS": [
+            {
+              "label": "N_STEP_TS",
+              "kind": "数值",
+              "note": "数值：自旋温度壳层数",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ],
+          "tag:USE_MINI_HALOS": [
+            {
+              "label": "USE_MINI_HALOS",
+              "kind": "开关",
+              "note": "效应开关：要不要考虑迷你晕（Pop III）",
+              "ref": {
+                "docId": "",
+                "anchor": "",
+                "label": "",
+                "file": "",
+                "line": null,
+                "endLine": null
+              }
+            }
+          ]
+        },
         "refs": [
           {
             "docId": "",
@@ -10983,8 +11085,28 @@
         "observable": false,
         "conditional": false,
         "topics": [],
-        "tags": [],
-        "tagDetails": {},
+        "tags": [
+          "tag:N_STEP_TS",
+          "tag:USE_MINI_HALOS"
+        ],
+        "tagDetails": {
+          "tag:N_STEP_TS": [
+            {
+              "label": "N_STEP_TS",
+              "kind": "块",
+              "note": "成员里有 3 个量带着它：过滤后的 X 射线源 · X 射线源的历史卷积（加热源）、ρ̇*_R(x) · 环形滤波后的恒星形成率场、⟨ρ̇*⟩ · 恒星形成率的体积平均",
+              "ref": null
+            }
+          ],
+          "tag:USE_MINI_HALOS": [
+            {
+              "label": "USE_MINI_HALOS",
+              "kind": "块",
+              "note": "成员里有 3 个量带着它：过滤后的 X 射线源 · X 射线源的历史卷积（加热源）、ρ̇*_R(x) · 环形滤波后的恒星形成率场、⟨ρ̇*⟩ · 恒星形成率的体积平均",
+              "ref": null
+            }
+          ]
+        },
         "refs": [
           {
             "docId": "",
@@ -14018,7 +14140,10 @@
           "stages": [
             "S14"
           ],
-          "tags": [],
+          "tags": [
+            "tag:N_STEP_TS",
+            "tag:USE_MINI_HALOS"
+          ],
           "position": {
             "x": -144,
             "y": 316.5
@@ -15145,7 +15270,10 @@
       "nodes": [
         "eps_heat",
         "jalpha",
-        "xalpha"
+        "xalpha",
+        "filtered_xray",
+        "filtered_sfr",
+        "mean_sfr"
       ],
       "edges": []
     },
@@ -15260,6 +15388,9 @@
         "ts",
         "xc",
         "phi_uv",
+        "filtered_xray",
+        "filtered_sfr",
+        "mean_sfr",
         "gamma_12",
         "recomb",
         "mfp",
@@ -16738,5 +16869,5 @@
     "codeSitesPending": 0,
     "pendingUnits": []
   },
-  "stamp": "generated-aaed3fac445a"
+  "stamp": "generated-ac69912e04f8"
 }
