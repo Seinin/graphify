@@ -47,7 +47,7 @@ const LANGUAGES: Record<string, unknown> = {
 Object.entries(LANGUAGES).forEach(([name, definition]) => {
   SyntaxHighlighter.registerLanguage(name, definition as never)
 })
-import { Copy, ExternalLink, Link2, List, Loader2 } from 'lucide-react'
+import { Copy, Link2, List, Loader2 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet'
 import { Badge, Separator } from './ui/badge'
 import { Button } from './ui/button'
@@ -57,7 +57,7 @@ import { HeadingText } from './HeadingText'
 import { useMdContent } from '../hooks/useMdLibrary'
 import { anchorDomId, findHeading, headingIndent, headingSlug, rehypeHeadingAnchors } from '../lib/slug'
 import { cn, formatChars } from '../lib/utils'
-import { copyText, openInVscode } from '../lib/vscode'
+import { copyText } from '../lib/clipboard'
 import type { GraphRef } from '../lib/types'
 
 /**
@@ -151,12 +151,6 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
 
   const targetLine = activeHeading?.line ?? 1
 
-  const openInEditor = () => {
-    if (!doc) return
-    const result = openInVscode(doc.absolutePath, targetLine)
-    if (!result.ok) copyText(`${doc.absolutePath}:${targetLine}`)
-  }
-
   /** react-markdown 交给自定义组件的 props：`node` 是 hast 节点，其余才是要落到 DOM 上的属性 */
   type HeadingProps = React.ComponentPropsWithoutRef<'h2'> & { node?: unknown }
 
@@ -207,12 +201,6 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
                   onClick={() => doc && copyText(`${doc.absolutePath}:${targetLine}`)}
                 >
                   <Copy className="h-3.5 w-3.5" />
-                </Button>
-              </Tooltip>
-              <Tooltip content="用 vscode:// 协议在编辑器中打开">
-                <Button variant="secondary" size="sm" onClick={openInEditor} disabled={!doc}>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  在 VS Code 中打开
                 </Button>
               </Tooltip>
             </div>

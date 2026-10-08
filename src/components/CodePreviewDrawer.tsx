@@ -3,7 +3,6 @@ import {
   ArrowDownToLine,
   ArrowUpToLine,
   ClipboardCopy,
-  ExternalLink,
   FileCode,
   Info,
   Link2,
@@ -17,7 +16,7 @@ import { ScrollArea } from './ui/scroll-area'
 import { Tooltip } from './ui/tooltip'
 import { CodeBlock } from './CodeSnippet'
 import { mergeRuns, useCodePager, type CodeWindowRun } from '../hooks/useCodeLibrary'
-import { copyText, openInVscode } from '../lib/vscode'
+import { copyText } from '../lib/clipboard'
 import type { GraphRef } from '../lib/types'
 
 /**
@@ -30,7 +29,7 @@ import type { GraphRef } from '../lib/types'
  * 段只是**读取与传输**单位：显示层把已加载的段按「首尾相接」合并成连续区间，
  * 一个区间只做一次词法分析——否则每 300 行的接缝都会把跨行的文档串 / 块注释切断。
  *
- * 三个出口与 md 阅读器保持一致：在 VS Code 中打开 / 复制「路径:行」/ 挂到当前选中节点。
+ * 两个出口与 md 阅读器保持一致：复制「路径:行」/ 挂到当前选中节点。
  * 它们一律对准**被引用的那几行**，不随滚动漂移（否则滚一会儿再复制，位置就变了）。
  */
 interface CodePreviewDrawerProps {
@@ -289,13 +288,6 @@ export function CodePreviewDrawer({
     }
   }, [open, viewport, loadPrev, loadNext])
 
-  const openInEditor = () => {
-    if (!meta) return
-    const result = openInVscode(meta.absolutePath, anchorStartLine)
-    // 协议没注册时退化为复制位置，用户可以自己粘到编辑器（与 md 阅读器同一策略）
-    if (!result.ok) copyText(location)
-  }
-
   const attachRef = () => {
     if (!meta) return
     onAddRef({
@@ -373,12 +365,6 @@ export function CodePreviewDrawer({
               <Tooltip content="把「路径:行」复制到剪贴板">
                 <Button variant="ghost" size="icon-sm" onClick={() => copyText(location)}>
                   <ClipboardCopy className="h-3.5 w-3.5" />
-                </Button>
-              </Tooltip>
-              <Tooltip content="在 VS Code 中打开并定位到这一行">
-                <Button variant="ghost" size="sm" onClick={openInEditor} disabled={!meta}>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  在 VS Code 中打开
                 </Button>
               </Tooltip>
             </div>

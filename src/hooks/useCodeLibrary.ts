@@ -149,7 +149,7 @@ export function mergeRuns(segments: CodeWindow[]): CodeWindowRun[] {
 /** 分页器对外暴露的文件元信息（取任一段的公共字段） */
 export interface CodePagerMeta {
   path: string
-  /** 绝对路径：给「在 VS Code 中打开」用（编辑器协议要的是绝对路径） */
+  /** 绝对路径：复制「路径:行」时带上它，粘到编辑器 / 终端里可直接定位 */
   absolutePath: string
   name: string
   language: string
