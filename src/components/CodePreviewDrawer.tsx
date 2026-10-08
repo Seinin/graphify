@@ -375,7 +375,7 @@ export function CodePreviewDrawer({
         {meta?.oversizedReason ? (
           <div className="flex shrink-0 items-start gap-1.5 border-b border-black/[0.07] bg-amber-50/70 px-4 py-2 text-micro text-muted-foreground">
             <Info className="mt-[1px] h-3 w-3 shrink-0 text-amber-600" />
-            <span>大文件：按段加载，完整阅读建议在 VS Code 中打开（{meta.oversizedReason}）。</span>
+            <span>大文件：按段加载，完整阅读建议在编辑器里打开（{meta.oversizedReason}）。</span>
           </div>
         ) : null}
 
