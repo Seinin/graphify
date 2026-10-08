@@ -920,12 +920,12 @@ async function main() {
   const declaredMembers = blockItems.flatMap((block) => block.members ?? [])
   const duplicatedMembers = declaredMembers.filter((id, index) => declaredMembers.indexOf(id) !== index)
   ok(duplicatedMembers.length === 0, '没有量属于两个块（不重）', [...new Set(duplicatedMembers)].join(','))
-  ok(allQuantityIds.length === 38, '物理量共 38 个（34 nodes + 4 drivers）', String(allQuantityIds.length))
+  ok(allQuantityIds.length === 41, '物理量共 41 个（37 nodes + 4 drivers）', String(allQuantityIds.length))
   const quantityMemberIds = declaredMembers.filter((id) => allQuantityIds.includes(id))
   const fileMemberIds = declaredMembers.filter((id) => !allQuantityIds.includes(id))
   ok(
     JSON.stringify([...quantityMemberIds].sort()) === JSON.stringify([...allQuantityIds].sort()),
-    '块的物理量成员并集 = 全部 38 个物理量（不重不漏；驱动量不再漂在一级）',
+    '块的物理量成员并集 = 全部 41 个物理量（不重不漏；驱动量不再漂在一级）',
     `成员里 ${quantityMemberIds.length} 个是物理量`,
   )
   // 块的成员一律是物理量：文件只在 `codeAnchor` 里出现，不挂成员（所以「文件成员」这一类为空）
@@ -1069,9 +1069,9 @@ async function main() {
   /**
    * 块级数字（`specs/graphify-physics-chain/spec.md` 的「块级数字可证伪」）：对不上要指出差在哪个数上。
    */
-  ok(quantityEdges.length === 54, '量 → 量的主序依赖边恰为 54 条', String(quantityEdges.length))
-  ok(internalEdges.length === 24, '块内边恰为 24 条（只进子图，不进主图）', String(internalEdges.length))
-  ok(crossEdgesAll.length === 30, '跨块边恰为 30 条（已汇总成接口边）', String(crossEdgesAll.length))
+  ok(quantityEdges.length === 58, '量 → 量的主序依赖边恰为 58 条', String(quantityEdges.length))
+  ok(internalEdges.length === 26, '块内边恰为 26 条（只进子图，不进主图）', String(internalEdges.length))
+  ok(crossEdgesAll.length === 32, '跨块边恰为 32 条（已汇总成接口边）', String(crossEdgesAll.length))
   ok(
     crossEdgesAll.length + internalEdges.length + interfaceEdges.length + feedbackEdgesAll.length ===
       blockEdgesAll.length,
@@ -1164,7 +1164,7 @@ async function main() {
   const quantityMembersOut = membersOut.filter((id) => allQuantityIds.includes(id))
   ok(
     JSON.stringify([...quantityMembersOut].sort()) === JSON.stringify([...allQuantityIds].sort()),
-    '`blocks.items` 的物理量成员并集 = 全部 38 个物理量（不重不漏）',
+    '`blocks.items` 的物理量成员并集 = 全部 41 个物理量（不重不漏）',
     `${quantityMembersOut.length} 个物理量 / 全部成员 ${membersOut.length} 项`,
   )
   ok(
@@ -1324,8 +1324,8 @@ async function main() {
   const statsOut = blocksOut.stats ?? {}
   ok(
     JSON.stringify(statsOut) ===
-      JSON.stringify({ blocks: 11, processBlocks: 10, layerBlocks: 1, members: 38, fileMembers: 0, interfaceEdges: 21 }),
-    '一级口径数字（11 块 / 10 过程 / 1 层 / 38 物理量成员 / 0 文件成员 / 21 接口）与重算一致',
+      JSON.stringify({ blocks: 11, processBlocks: 10, layerBlocks: 1, members: 41, fileMembers: 0, interfaceEdges: 21 }),
+    '一级口径数字（11 块 / 10 过程 / 1 层 / 41 物理量成员 / 0 文件成员 / 21 接口）与重算一致',
     JSON.stringify(statsOut),
   )
   console.log(
@@ -1341,7 +1341,7 @@ async function main() {
      * 规则同 `src/lib/topics.ts` 的 tabVisibleIds —— 遍历只在**容器**（`type: 'group'`）上下钻。
      *
      * 根节点是两个**段容器** + 层块自己（层没有容器），下钻一层拿到它们的块（块是普通节点，不再往下钻）。
-     * "一级恰好 11 个块 + 2 个段容器"因此是**结构**保证的：38 个物理量成员挂在块下、
+     * "一级恰好 11 个块 + 2 个段容器"因此是**结构**保证的：41 个物理量成员挂在块下、
      * 步骤挂在成员下，三层各自不越界；而不是靠"默认收起几个话题"过滤出来的。
      */
     const containers = allGraphNodes.filter((node) => node.type === 'group')
@@ -2464,6 +2464,11 @@ async function main() {
         .replace(/[\s\u3000]+/g, '-')
         .replace(/-{2,}/g, '-')
         .replace(/^-+|-+$/g, '')
+    /**
+     * **标题的序号是排版，不进锚点**：`## 八、<成员标签>` 的锚点仍是 `<成员标签>` 的 slug
+     * （否则成员那几条笔记引用会当场落空）。与前端 `src/lib/slug.ts` 的 `headingSlug` 同一条规则。
+     */
+    const headingSlug = (text) => refSlug(String(text ?? '').replace(/^[一二三四五六七八九十百]+[、.．]\s*/, ''))
     const refKeyOf = (ref) => (ref.file ? `file:${ref.file}:${ref.line ?? ''}:${ref.endLine ?? ''}` : `doc:${ref.docId}#${ref.anchor}`)
     const byChars = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
     /** 去重（先到先得）+ 排序：代码引用在前、笔记引用在后 */
@@ -2656,7 +2661,7 @@ async function main() {
                 .split(/\r?\n/)
                 .flatMap((line) => {
                   const match = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line)
-                  return match && match[2].trim() ? [{ depth: match[1].length, text: match[2].trim(), slug: refSlug(match[2].trim()) }] : []
+                  return match && match[2].trim() ? [{ depth: match[1].length, text: match[2].trim(), slug: headingSlug(match[2].trim()) }] : []
                 }),
         )
       }
@@ -2794,7 +2799,11 @@ async function main() {
       proseOffenders.slice(0, 3).join(' | '),
     )
 
-    /** 4) 模块文档面：路径上的每一段（块目录 / 成员文件名）+ `#`–`###` 标题（标题就是名字，锚点由它算出来） */
+    /**
+     * 4) 模块文档面：路径上的每一段（块目录 / 成员文件名）+ `#`–`###` 标题。这里查的是**内部编号**
+     * （`L0` / `M8` / `S14.3.1`）；标题可以带中文序号（`## 八、<成员标签>`），那条是排版、不是名字，
+     * 算锚点时剥掉（口径见本文件上面的 `headingSlug` 与 `docs/notes/physics-chain/README.md` §九「锚点」）。
+     */
     const docOffenders = []
     const docPaths = []
     const walkDocs = async (dir) => {

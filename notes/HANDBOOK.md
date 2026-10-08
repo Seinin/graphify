@@ -54,16 +54,16 @@ P01 参数集 ─▶ P02 初始条件 ─┬─▶ P03 微扰场 ─────
 | 3 | 引力扰动 | `block:grav` | 过程 | 2 | `PerturbedField.c`·`ComputePerturbedField` |
 | 4 | 晕目录与质量函数 | `block:halocat` | 过程 | 4 | `HaloCatalog.c`·`ComputeHaloCatalog` |
 | 5 | 晕到星系属性 | `block:galaxy` | 过程 | 5 | `PerturbedHaloCatalog.c`·`ComputePerturbedHaloCatalog` |
-| 6 | 网格化源项 | `block:halobox` | 过程 | 3 | `HaloBox.c`·`ComputeHaloBox` |
+| 6 | 网格化源项 | `block:halobox` | 过程 | 4 | `HaloBox.c`·`ComputeHaloBox` |
 | 7 | X 射线源的历史卷积 | `block:xray` | 过程 | 3 | `SpinTemperatureBox.c`·`UpdateXraySourceBox` |
-| 8 | 气体热与自旋温度 | `block:thermal` | 过程 | 6 | `SpinTemperatureBox.c`·`ComputeTsBox` |
-| 9 | 电离场 | `block:ionization` | 过程 | 5 | `IonisationBox.c`·`ComputeIonizedBox` |
+| 8 | 气体热与自旋温度 | `block:thermal` | 过程 | 7 | `SpinTemperatureBox.c`·`ComputeTsBox` |
+| 9 | 电离场 | `block:ionization` | 过程 | 6 | `IonisationBox.c`·`ComputeIonizedBox` |
 | 10 | 亮温与观测 | `block:obs` | 过程 | 3 | `BrightnessTemperatureBox.c`·`ComputeBrightnessTemp` |
 
 > 第 7、8 块**共用同一个 `.c`** 但函数与盒子不同，所以是两个块。
 > 输出盒子依次：`PhysicalConstants`/`CosmoTables`/`InitialConditions`/`PerturbedField`/`HaloCatalog`/`PerturbedHaloCatalog`/`HaloBox`/`XraySourceBox`/`TsBox`/`IonizedBox`/`BrightnessTemp`。
 
-**逐块成员（38 个，真源 `blocks.items[].members`）**
+**逐块成员（41 个，真源 `blocks.items[].members`）**
 
 | 块 | 成员 |
 | :--- | :--- |
@@ -73,17 +73,17 @@ P01 参数集 ─▶ P02 初始条件 ─┬─▶ P03 微扰场 ─────
 | 引力扰动 | `perturb_field`、`perturb_velocity` |
 | 晕目录 | `tvir_min` → `mmin`、`hmf_impl` → `dn_dm` |
 | 晕到星系 | `scaling_relations`、`rho_star`、`phi_uv`、`fstar`、`lx` |
-| 网格化源项 | `source_grid`、`nion`、`zeta` |
+| 网格化源项 | `source_grid`、`nion`、`nion_grid`、`zeta` |
 | X 射线 | `filtered_xray`、`filtered_sfr`、`mean_sfr` |
-| 热与自旋温度 | `eps_heat`、`tk`、`jalpha`、`xalpha`、`xc`、`ts` |
-| 电离场 | `q_hii`、`gamma_12`、`recomb`、`mfp`、`z_reion` |
+| 热与自旋温度 | `eps_heat`、`tk`、`jalpha`、`xalpha`、`j21_lw`、`xc`、`ts` |
+| 电离场 | `q_hii`、`neutral_fraction`、`gamma_12`、`recomb`、`mfp`、`z_reion` |
 | 亮温与观测 | `dtb`、`p21`、`tau_e` |
 
-**块内边 24 条**（每个可进入的块至少 1 条）；例：`transfer_fn → matter_power`（`cosmology.c:398` / `:450`）。出处：`chain.json`、`G4-物理链.md` §2.1、`physics-chain/modules/<块>.md`（11 篇手写，一模块一篇）。
+**块内边 26 条**（每个可进入的块至少 1 条）；例：`transfer_fn → matter_power`（`cosmology.c:398` / `:450`）。出处：`chain.json`、`G4-物理链.md` §2.1、`physics-chain/modules/<块>.md`（11 篇手写，一模块一篇）。
 
 ### 2.3 块间接口与回流
 
-54 条依赖边 = **块内 24** + **跨块 30**；跨块按"块对"合并为 **21 条接口边**，另有 **2 条跨红移回流边**（边条目合计 77 = 54+21+2）。**接口边静息不画**，悬浮块时显现，箭头文字只写跨块交付的量名。
+58 条依赖边 = **块内 26** + **跨块 32**；跨块按"块对"合并为 **21 条接口边**，另有 **2 条跨红移回流边**（边条目合计 81 = 58+21+2）。**接口边静息不画**，悬浮块时显现，箭头文字只写跨块交付的量名。
 
 接口边（上游 → 下游，括号内为交付量）：
 
@@ -93,8 +93,8 @@ P01 参数集 ─▶ P02 初始条件 ─┬─▶ P03 微扰场 ─────
 - 引力扰动 → 热与自旋温度（`perturb_field`）、→ 电离场、→ 亮温
 - 晕目录 → 晕到星系（`dn_dm`/`mmin`×3）、→ 网格化源项（`dn_dm`）
 - 晕到星系 → 网格化源项（`scaling_relations`/`fstar`/`rho_star`）、→ 热与自旋温度（`lx`/`rho_star`）
-- 网格化源项 → 电离场（`nion`）、→ X 射线（`source_grid`）
-- X 射线 → 热与自旋温度（`filtered_xray`）
+- 网格化源项 → 电离场（`nion`/`nion_grid`）、→ X 射线（`source_grid`）
+- X 射线 → 热与自旋温度（`filtered_xray`/`filtered_sfr`）
 - 热与自旋温度 → 亮温（`ts`）；电离场 → 亮温（`q_hii`×3）
 
 **两条回流边**（下游回喂上游，取自**上一个红移**的快照）：
@@ -110,7 +110,7 @@ P01 参数集 ─▶ P02 初始条件 ─┬─▶ P03 微扰场 ─────
 
 - **顶层物理驱动量**（真源 `drivers`，4 个）：`f*`、`ζ`、`T_vir^min`、`L_X`，带取值范围。
 - **`params` 五组，共 63**：`drivers` 8 / `astro` 29 / `cosmo` 12 / `numeric` 5 / `effects` 9；按代码里的类名分则是 `AstroParams` 40 / `CosmoParams` 12 / `AstroOptions` 11。
-- **参数 × 节点矩阵 `paramMatrix` 62 条**；**标签注册表 62 条**（一个参数一个标签）挂在 **32 个节点**上——注册表硬编码在生成脚本 `Graphify/scripts/build-physics-chain.mjs`，随生成物发为 `graph.meta.tags`。
+- **参数 × 节点矩阵 `paramMatrix` 62 条**；**标签注册表 62 条**（一个参数一个标签）挂在 **39 个节点**上——注册表硬编码在生成脚本 `Graphify/scripts/build-physics-chain.mjs`，随生成物发为 `graph.meta.tags`。
 - **宇宙学参数分两类**：控制性选项（`HMF`、`POWER_SPECTRUM`、`SOURCE_MODEL`、`FILTER`、`FDM`…）**挂标签**，在 `MatterOptions`（`wrapper/inputs.py:560`）而**不在** `CosmoParams`；硬编码常量（`Constants.c:25` 的 `T_cmb = 2.7255`）**只写文档、不上图**。
 - **天体物理参数**（`AstroParams` 那 40 个）单独一个「抽屉」：选中词条 → 高亮相关模块。
 - **效应开关**（`USE_*`、`INTEGRATION_METHOD_*`、`PHOTON_CONS_TYPE`）**画在它门控的那条边**上。
@@ -203,7 +203,7 @@ P01 参数集 ─▶ P02 初始条件 ─┬─▶ P03 微扰场 ─────
 
 ### 4.2 物理链图 `Graphify/src/generated/physics-chain.json`
 
-由真源 `docs/notes/physics-chain/chain.json` **机械生成**（`npm run build:chain`，自检 `npm run check:chain`，**267 项**）：11 块 + 38 成员 + 77 条边（54 依赖 + 21 接口 + 2 回流）+ 63 参数 + 62 条标签注册 + 46 处成员代码落点（去重后 `stats.codeSites`；真源核定 `codeSitesFromChain` 记 47 条）。
+由真源 `docs/notes/physics-chain/chain.json` **机械生成**（`npm run build:chain`，自检 `npm run check:chain`，**267 项**）：11 块 + 41 成员 + 81 条边（58 依赖 + 21 接口 + 2 回流）+ 63 参数 + 62 条标签注册 + 55 处成员代码落点（去重后 `stats.codeSites`；真源核定 `codeSitesFromChain` 记 56 条）。
 
 > **改图先改真源**：改 `chain.json`，再 `build:chain`；不要改生成物。
 

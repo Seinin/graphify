@@ -774,7 +774,7 @@ async function main() {
       const blockOrder = new Map(blockItems.map((item) => [item.id, item.order ?? 0]))
       const boxIds = blockItems.map((item) => item.id)
       /**
-       * **块间接口边**：主图唯一的边（**20 条**：24 条跨块依赖落在 20 对块上）。两端分属不同块的"量 → 量"依赖汇总而来，
+       * **块间接口边**：主图唯一的边（**21 条**：32 条跨块依赖落在 21 对块上）。两端分属不同块的"量 → 量"依赖汇总而来，
        * 同一对块只留一条，**标签写跨界流动的那个量的符号**（如 `④ → ⑤ Q_HII`，见 design.md D5）。
        * 静息不画：`focusOnly: true` —— 悬浮两端任一块时才显现。
        */
@@ -1288,15 +1288,15 @@ async function main() {
         },
         nodes: [...gNodes, ...blockNodes, ...segNodes],
         /**
-         * 一级（主图）的边 = **20 条块间接口**（`iface:*`）：静息不画，悬浮两端任一块时才显现
-         * （`focusOnly` 字段，）。`gEdges` 那 34 条"量 → 量"仍留在数据里：
-         * 块内 10 条留给子图画，块间 24 条已**汇总成 20 条**接口边（同一对块合并成一条）。
+         * 一级（主图）的边 = **21 条块间接口**（`iface:*`）：静息不画，悬浮两端任一块时才显现
+         * （`focusOnly` 字段，）。`gEdges` 那 58 条"量 → 量"仍留在数据里：
+         * 块内 26 条留给子图画，块间 32 条已**汇总成 21 条**接口边（同一对块合并成一条）。
          * 视图按 `parent` 聚焦，一级只看得到块。
          */
         edges: [...gEdges, ...interfaceEdges, ...feedbackEdges],
         /**
          * **块（一级的 10 个过程块 + 1 个层）**：一级划分的事实全在这一处，视图与自检都读它、不各自重算。
-         *   · `members`：那 39 个物理量（不重不漏，自检逐块核）；层的成员（`tgamma`）也是物理量，照常计入；
+         *   · `members`：那 41 个物理量（不重不漏，自检逐块核）；层的成员（`tgamma`）也是物理量，照常计入；
          *   · `enterable`：`kind === 'process'` 才可进入；层不可进入（进去没有子图）；
          *   · `codeAnchor`：`.c` + `Compute*` + 盒子结构名，自检逐条断言真实存在；
          *   · `interfaceIn` / `interfaceOut`：对外接口是哪几条 `iface:*`（**只供自检**核对

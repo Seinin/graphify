@@ -19,6 +19,20 @@ export function slugify(text) {
     .replace(/^-+|-+$/g, '')
 }
 
+/**
+ * 标题里的中文序号前缀（`一、`、`十、`…）：只是排版，不算名字的一部分。
+ * 模块文档的标题写成 `## 八、<成员标签>`，而节点的笔记引用锚在**成员标签**上，
+ * 所以算锚点前先把号剥掉；前端 `src/lib/slug.ts` 持有同一份规则。
+ */
+export function stripSectionNumber(text) {
+  return String(text || '').replace(/^[一二三四五六七八九十百]+[、.．]\s*/, '')
+}
+
+/** 标题的锚点：先剥序号，再 slug 化（与前端 `headingSlug` 同口径） */
+export function headingSlug(text) {
+  return slugify(stripSectionNumber(text))
+}
+
 /** 相对路径 <-> docId（统一使用 POSIX 分隔符） */
 export function toDocId(absPath) {
   return path.relative(MD_DIR, absPath).split(path.sep).join('/')
@@ -79,7 +93,7 @@ export function parseMarkdown(content, fallbackTitle) {
       const depth = match[1].length
       const text = match[2].trim()
       if (!text) return
-      const base = slugify(text) || `section-${index + 1}`
+      const base = headingSlug(text) || `section-${index + 1}`
       const seen = usedSlugs.get(base) || 0
       usedSlugs.set(base, seen + 1)
       const slug = seen === 0 ? base : `${base}-${seen}`

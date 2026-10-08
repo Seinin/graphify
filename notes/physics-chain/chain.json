@@ -37,7 +37,7 @@
       ],
       "reviewSection": "§3.6 天体物理源与历史",
       "note": "推导写作 ALPHA_STAR；仓库当前跟踪的是新参数化 F_STAR10（log10 存储、默认 -1.3、范围 [-3,0]）。两者是同一物理量的新旧参数化，不可混写。",
-      "theory": "理论出处：推导 PDF · Eq.1（f* 的幂律与低质端指数截断）。**代码的取值比式子里多三项**：高质端在转折质量以上换另一个指数（双幂律，默认参数下就生效）、每个晕按对数正态散射抽一次（宽度 σ_⋆；默认口径给的是条件分布的均值，故减 σ_⋆²/2 使散射项的期望为 1；HALO_SCALING_RELATIONS_MEDIAN 打开则改为给中值、去掉这一项）、并硬截断在一以内。这属于「同一套算法的细化版」而非两码事，所以摘要给代码的完整表达式；PDF 的简式是它的特例（高质端不换幂律、去掉散射项）。"
+      "theory": "理论出处：推导 PDF · Eq.1（f* 的幂律与低质端指数截断）。**代码的取值比式子里多三项**：高质端在 M_turn 以上换另一个指数（双幂律，默认参数下就生效）、每个晕按对数正态散射抽一次（宽度 σ_⋆；默认口径给的是条件分布的均值，故减 σ_⋆²/2 使散射项的期望为 1；HALO_SCALING_RELATIONS_MEDIAN 打开则改为给中值、去掉这一项）、并硬截断在一以内。这属于「同一套算法的细化版」而非两码事，所以摘要给代码的完整表达式；PDF 的简式是它的特例（高质端不换幂律、去掉散射项）。"
     },
     {
       "id": "zeta",
@@ -156,7 +156,7 @@
         "S08"
       ],
       "reviewSection": "§3.6",
-      "surfaceNote": "它是 Eq.1 积分里本来就有的符号（∫ dn/dM · dM/dt dM）——补一个节点解释它，不是新增物理。它**怎么被算出来**（传输函数、方差、质量函数公式）进子图。",
+      "surfaceNote": "它是 Eq.1 积分里本来就有的符号（∫ dn/dM · dM/dt dM）——补一个节点解释它，不是新增物理。它的**算法**（传输函数、方差、质量函数公式）在成员内部展开。",
       "codeSites": [
         {
           "file": "src/py21cmfast/src/hmf.c",
@@ -185,7 +185,7 @@
     {
       "id": "hmf_impl",
       "symbol": "质量函数的算法",
-      "name": "把 dn/dM 算出来",
+      "name": "窗积分与多重数公式",
       "kind": "engineering",
       "eq": "Eq.1 的实现",
       "formula": "",
@@ -267,7 +267,7 @@
     {
       "id": "source_grid",
       "symbol": "源项的实现",
-      "name": "把源项的积分算出来",
+      "name": "条件积分与铺场算法",
       "kind": "engineering",
       "eq": "Eq.1 / Eq.4 的实现",
       "formula": "",
@@ -289,7 +289,7 @@
       "choices": [
         {
           "name": "SOURCE_MODEL",
-          "desc": "选哪条路把积分算出来：① 离散晕累加（逐晕算属性再累加到网格）② 条件积分表（先建条件表，再逐格点积分，取盒均值）"
+          "desc": "两条铺场路线：① 离散晕累加（逐晕算属性再累加到网格）② 条件积分表（先建条件表，再逐格点积分，取盒均值）"
         },
         {
           "name": "INTEGRATION_METHOD_ATOMIC / _MINI",
@@ -389,7 +389,8 @@
         "fstar",
         "mmin",
         "rho_star",
-        "source_grid"
+        "source_grid",
+        "nion_grid"
       ],
       "nature": {
         "type": "代数式",
@@ -432,6 +433,69 @@
       ]
     },
     {
+      "id": "nion_grid",
+      "symbol": "Ṅ_ion(x, z)",
+      "name": "逐格点电离光子发射率场",
+      "kind": "quantity",
+      "page": 3,
+      "eq": "Eq.4",
+      "formula": "",
+      "dependsOn": [
+        "source_grid"
+      ],
+      "nature": {
+        "type": "场（每红移一张，逐晕 CIC 累加到输出网格）",
+        "homogeneity": "非均匀",
+        "coupling": "—",
+        "nonlocal": "否：逐晕局部累加",
+        "degenerate": "是：与 Ṅ_ion(z) 共用 ζ·f* 简并"
+      },
+      "sections": [
+        "III 中性氢分数",
+        "X 总结性数学性质表"
+      ],
+      "codeHints": [
+        "S12"
+      ],
+      "reviewSection": "§3.3",
+      "implementedAs": "map_mass.c:311-313 的 do_cic_interpolation(boxes->n_ion, pos, out_dim, properties.n_ion * prefactor_nion + properties.fescweighted_sfr * prefactor_nion_mini) 把逐晕电离光子产额 CIC 累加进 HaloBox.n_ion；:424 是晕目录路径的同名调用；:459 boxes->n_ion[i_cell] *= cell_vol_inv 按格点体积归一；HaloBox.c:219 按全局平均重标定（光子守恒）。",
+      "codeRef": "map_mass.c:309-313 / :423-424 / :457-460（另 HaloBox.c:219）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/map_mass.c",
+          "symbol": "move_grid_galprops",
+          "line": 309,
+          "endLine": 313,
+          "needles": [
+            "do_cic_interpolation",
+            "boxes->n_ion",
+            "prefactor_nion"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/map_mass.c",
+          "symbol": "move_halo_galprops",
+          "line": 423,
+          "endLine": 424,
+          "needles": [
+            "do_cic_interpolation",
+            "boxes->n_ion",
+            "properties.n_ion"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/map_mass.c",
+          "symbol": "move_halo_galprops",
+          "line": 458,
+          "endLine": 460,
+          "needles": [
+            "boxes->n_ion",
+            "cell_vol_inv"
+          ]
+        }
+      ]
+    },
+    {
       "id": "q_hii",
       "theory": "理论出处：推导 PDF · Eq.3（一阶 ODE：dQ_HII/dt = Ṅ_ion/n̄_H − α_B C n̄_H Q_HII (1+z)³）。**代码不求解这个 ODE**——代码走游程集 / 逐格点判据（见算法锚点），图上按代码画（两码事时以代码为准，理论在文档里给）。",
       "symbol": "Q_HII(z) = 1 − x_HI(z)",
@@ -441,7 +505,7 @@
       "eq": "Eq.3",
       "formula": "dQ_HII/dt = Ṅ_ion/n̄_H − α_B C n̄_H Q_HII (1+z)^3",
       "dependsOn": [
-        "nion"
+        "neutral_fraction"
       ],
       "nature": {
         "type": "一阶非线性 ODE（复合项 ∝ Q_HII，源项含指数）",
@@ -479,6 +543,69 @@
             "global_xH",
             "box->neutral_fraction",
             "HII_TOT_NUM_PIXELS"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "neutral_fraction",
+      "symbol": "x_HI(x, z)",
+      "name": "逐格点中性氢分数场",
+      "kind": "quantity",
+      "page": 3,
+      "eq": "Eq.3",
+      "formula": "",
+      "dependsOn": [
+        "gamma_12",
+        "recomb",
+        "nion_grid"
+      ],
+      "nature": {
+        "type": "场（每红移一张，逐格点电离判据给出）",
+        "homogeneity": "非均匀",
+        "coupling": "单向：进亮温的 (1−x_HI) 项，并决定哪些格点被判为已电离",
+        "nonlocal": "有记忆：判据读上一红移的电离盒与累积复合数",
+        "degenerate": "否"
+      },
+      "sections": [
+        "III 中性氢分数",
+        "X 总结性数学性质表"
+      ],
+      "codeHints": [
+        "S13"
+      ],
+      "reviewSection": "§3.3",
+      "implementedAs": "IonisationBox.c:1188 box->neutral_fraction[index_r] = res_xH 是逐格点出口（越过判据的格点走 :1145 置零，或 :1147 update_in_sphere 把整片泡抹平）；:1161-1180 是部分电离的残值；:538-540 与 :553 是整体中性路径（按 X 射线预电离份额或 xion_RECFAST 给值）。",
+      "codeRef": "IonisationBox.c:1185-1188 / :1144-1148 / :538-553",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1185,
+          "endLine": 1188,
+          "needles": [
+            "box->neutral_fraction",
+            "res_xH"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "find_ionised_regions",
+          "line": 1144,
+          "endLine": 1148,
+          "needles": [
+            "box->neutral_fraction",
+            "update_in_sphere"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/IonisationBox.c",
+          "symbol": "set_fully_neutral_box",
+          "line": 538,
+          "endLine": 540,
+          "needles": [
+            "box->neutral_fraction",
+            "xray_ionised_fraction"
           ]
         }
       ]
@@ -643,6 +770,66 @@
             "xa_tilde_fast",
             "xa_tilde_prefactor",
             "J_alpha_tot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "j21_lw",
+      "symbol": "J_21^LW(x, z)",
+      "name": "莱曼-维尔纳背景强度场",
+      "kind": "quantity",
+      "page": "",
+      "eq": "",
+      "formula": "",
+      "dependsOn": [
+        "filtered_sfr"
+      ],
+      "nature": {
+        "type": "场（每红移一张，由滤过的恒星形成率逐环壳累加）",
+        "homogeneity": "非均匀",
+        "coupling": "单向：进分子冷却支的 M_turn^m，不反馈回源",
+        "nonlocal": "有记忆：同一红移内跨环壳累加，且只在 USE_MINI_HALOS 下非零",
+        "degenerate": "否"
+      },
+      "sections": [],
+      "codeHints": [
+        "S14.2"
+      ],
+      "reviewSection": "§3.6 天体物理源与历史",
+      "implementedAs": "SpinTemperatureBox.c:1697-1699 把滤过的恒星形成率按 dstarlyLW_dt_prefactor[R_ct] 逐环壳累加进 dstarlyLW_dt_box；:1825 折成 rad.dstarLW_dt = dstarlyLW_dt_box[box_ct] * zp_consts.lya_star_prefactor * zp_consts.volunit_inv；:1312 的 output.J_21_LW 是逐格点出口，**只在 USE_MINI_HALOS 下非零**（关闭时三元式直接给 0）。消费方是下一个红移的 ComputeHaloBox（HaloBox.c:491 逐格点读 previous_spin_temp->J_21_LW）。",
+      "codeRef": "SpinTemperatureBox.c:1697-1699（累加）/ :1822-1831（写）/ :1312（出口）",
+      "codeSites": [
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "ts_main",
+          "line": 1697,
+          "endLine": 1699,
+          "needles": [
+            "dstarlyLW_dt_box",
+            "sfr_term",
+            "dstarlyLW_dt_prefactor"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "ts_main",
+          "line": 1822,
+          "endLine": 1831,
+          "needles": [
+            "dstarLW_dt",
+            "dstarlyLW_dt_box",
+            "lya_star_prefactor"
+          ]
+        },
+        {
+          "file": "src/py21cmfast/src/SpinTemperatureBox.c",
+          "symbol": "get_Ts_fast",
+          "line": 1312,
+          "endLine": 1312,
+          "needles": [
+            "output.J_21_LW",
+            "dstarLW_dt"
           ]
         }
       ]
@@ -879,7 +1066,7 @@
         "rho_star"
       ],
       "nature": {
-        "type": "质量函数换元（晕质量函数 ÷ |dM_1500/dM_h| × 转折质量抑制 × 占空比）；论文是 Schechter 解析式",
+        "type": "质量函数换元（晕质量函数 ÷ |dM_1500/dM_h| × M_TURN 抑制 × 占空比）；论文是 Schechter 解析式",
         "homogeneity": "高度非线性（截断处极灵敏）",
         "coupling": "与 x_HI、f*、ζ **无直接代数关联** ⇒ 关键作用是**打破 ζ·f* 简并**",
         "nonlocal": "否",
@@ -1547,7 +1734,7 @@
       "eq": "",
       "formula": "",
       "dependsOn": [
-        "q_hii"
+        "neutral_fraction"
       ],
       "nature": {
         "type": "场（逐格点）",
@@ -1586,7 +1773,7 @@
       "eq": "",
       "formula": "",
       "dependsOn": [
-        "q_hii"
+        "neutral_fraction"
       ],
       "nature": {
         "type": "场（逐格点，记一个红移）",
@@ -1746,6 +1933,7 @@
         "members": [
           "source_grid",
           "nion",
+          "nion_grid",
           "zeta"
         ],
         "codeAnchor": {
@@ -1788,6 +1976,7 @@
           "tk",
           "jalpha",
           "xalpha",
+          "j21_lw",
           "xc",
           "ts"
         ],
@@ -1808,6 +1997,7 @@
         "flowStep": 4,
         "members": [
           "q_hii",
+          "neutral_fraction",
           "gamma_12",
           "recomb",
           "mfp",
@@ -1888,7 +2078,9 @@
         "members": [
           "zeta",
           "nion",
+          "nion_grid",
           "q_hii",
+          "neutral_fraction",
           "gamma_12",
           "recomb",
           "mfp",
@@ -1896,7 +2088,7 @@
         ],
         "primaryBlock": "block:halobox",
         "fit": "复合系数拟合式：Case A Abel et al. 1997（`thermochem.c:66`）、Case B Spitzer 1978（`thermochem.c:78`）；演化电离盒 McQuinn 2015 Eq.6（`thermochem.c:44`）；电离区平均自由程 R_max fit from Songaila+2010（`IonisationBox.c:182`）；电离反馈 Sobacchi & Mesinger 2013（`thermochem.c:21`）",
-        "note": "旧稿 ④。现真源跨「网格化源项」/「电离场」：`zeta` / `nion` 在「网格化源项」，`q_hii` / `gamma_12` / `recomb` / `mfp` / `z_reion` 在「电离场」（都是 IonizedBox 的字段），主块取它。这一条把 `fit` 里本来就写着的复合系数与平均自由程接上了成员。"
+        "note": "旧稿 ④。现真源跨「网格化源项」/「电离场」：`zeta` / `nion` / `nion_grid` 在「网格化源项」，`q_hii` / `neutral_fraction` / `gamma_12` / `recomb` / `mfp` / `z_reion` 在「电离场」（都是 IonizedBox 的字段），主块取它。这一条把 `fit` 里本来就写着的复合系数与平均自由程接上了成员。"
       },
       {
         "id": "process:thermal",
@@ -1915,7 +2107,8 @@
         "label": "Lyα 耦合",
         "members": [
           "jalpha",
-          "xalpha"
+          "xalpha",
+          "j21_lw"
         ],
         "primaryBlock": "block:thermal",
         "fit": "Lyα 加热：Reis+2021 Sec.3（`inputs.py:1028`）。Lyα 散射/耦合系数本身的拟合律未在代码注释里查到——**留空待核**。",
@@ -2041,7 +2234,7 @@
     },
     {
       "from": "gamma_12",
-      "to": "q_hii",
+      "to": "neutral_fraction",
       "eq": "",
       "page": "",
       "codeRef": "IonisationBox.c:1123 box->ionisation_rate_G12 → :1145 box->neutral_fraction",
@@ -2049,14 +2242,14 @@
     },
     {
       "from": "recomb",
-      "to": "q_hii",
+      "to": "neutral_fraction",
       "eq": "",
       "page": "",
       "codeRef": "IonisationBox.c:1085 读 previous_ionize_box->cumulative_recombinations → :1277 dNrec",
       "note": "电离平衡要减掉累积复合量：上一红移的 N_rec 是本步电离判据的一阶项。"
     },
     {
-      "from": "q_hii",
+      "from": "neutral_fraction",
       "to": "mfp",
       "eq": "",
       "page": "",
@@ -2064,7 +2257,7 @@
       "note": "电离区的尺度就是光子的平均自由程，与中性分数由同一次判据给出。"
     },
     {
-      "from": "q_hii",
+      "from": "neutral_fraction",
       "to": "z_reion",
       "eq": "",
       "page": "",
@@ -2274,7 +2467,7 @@
       "to": "dn_dm",
       "eq": "Eq.1 的实现",
       "page": 3,
-      "note": "dn/dM 怎么被算出来（传输函数 → 方差 → 质量函数公式）。原先缺这条边，hmf_impl 成了零边孤立节点"
+      "note": "dn/dM 的算法（传输函数 → 方差 → 质量函数公式）。原先缺这条边，hmf_impl 成了零边孤立节点"
     },
     {
       "from": "matter_power",
@@ -2379,6 +2572,38 @@
       "page": "",
       "codeRef": "HaloBox.c:487",
       "note": "同红移的主序输入（不是回流）：ComputeHaloBox 签名收 ini_boxes，:487 逐格点取 lowres_vcb，:489 起用它与 J21/Γ12 一起定 M_turn，M_turn 是 ComputeHaloBox 内部的临时数组（HaloBox.h 里没有这个字段），所以这条到此为止、不再流到别的盒子。"
+    },
+    {
+      "from": "nion_grid",
+      "to": "nion",
+      "eq": "",
+      "page": "",
+      "codeRef": "map_mass.c:309-313（CIC 网格）与 HaloBox.c:153-154（体积平均）",
+      "note": "同一次源项累加的两种表示：逐格点的 CIC 网格与体积平均（平均量由加权积分给出，不是对网格取算术平均；光子守恒时又反过来按它重标定网格，HaloBox.c:219）。"
+    },
+    {
+      "from": "nion_grid",
+      "to": "neutral_fraction",
+      "eq": "",
+      "page": "",
+      "codeRef": "IonisationBox.c:1476 prepare_box_for_filtering(halos->n_ion, grid_struct->stars_unfiltered, ...)",
+      "note": "算法流：lagrangian 源网格这条路上，电离判据的滤波源就是 HaloBox.n_ion 网格；另一条路用塌缩分数直接给判据（:1482 起）。"
+    },
+    {
+      "from": "neutral_fraction",
+      "to": "q_hii",
+      "eq": "",
+      "page": "",
+      "codeRef": "IonisationBox.c:1592 global_xH += box->neutral_fraction[ct]（:538-546 的整体中性路径同样累加）",
+      "note": "逐格点的场取盒均值即得全局电离分数。"
+    },
+    {
+      "from": "filtered_sfr",
+      "to": "j21_lw",
+      "eq": "",
+      "page": "",
+      "codeRef": "SpinTemperatureBox.c:1697-1699 dstarlyLW_dt_box[box_ct] += sfr_term * dstarlyLW_dt_prefactor[R_ct]",
+      "note": "LW 背景由滤过的恒星形成率逐环壳累加得到（sfr_term 取自 source_box->filtered_sfr，:1685-1693）。"
     }
   ],
   "params": {
@@ -2563,7 +2788,7 @@
       {
         "name": "M_TURN",
         "pl2012": "M_turn / T_vir^min 的替代",
-        "role": "驱动量：抑制恒星形成的转折质量",
+        "role": "驱动量：抑制恒星形成的 M_TURN",
         "default": 8.7,
         "log10": true,
         "range": [
@@ -2716,7 +2941,8 @@
         "paper": "Qin+2020（inputs.py 的 USE_MINI_HALOS 说明段）",
         "gatesEdges": [
           "rho_star->nion",
-          "rho_star->jalpha"
+          "rho_star->jalpha",
+          "filtered_sfr->j21_lw"
         ]
       },
       {
@@ -2751,7 +2977,7 @@
         "switch": true,
         "paper": "",
         "gatesEdges": [
-          "recomb->q_hii"
+          "recomb->neutral_fraction"
         ]
       }
     ]
@@ -3118,7 +3344,7 @@
       },
       "vcb": {
         "how": "对同一套线性场再抽一份高斯场做相对速度（低分辨版），只在 USE_RELATIVE_VELOCITIES 打开时算",
-        "when": "每次运行一次（与初始条件同一次调用里算出来）",
+        "when": "每次运行一次（与初始条件在同一次调用里算出）",
         "discretization": "低分辨网格 HII_DIM；高分辨场先算再降采样",
         "where": "src/py21cmfast/src/InitialConditions.c:547 ComputeInitialConditions；compute_relative_velocities 调用点 :734-735"
       },
@@ -3230,34 +3456,76 @@
         "discretization": "半径分箱 N_STEP_TS / R_MAX_TS",
         "where": "src/py21cmfast/src/SpinTemperatureBox.c:762-764 → :769"
       },
-      "gamma_12->q_hii": {
+      "gamma_12->neutral_fraction": {
         "how": "中性分数与电离光子率在同一段判据循环里算出（同一格点、同一半径）",
         "when": "每个红移一次（逐格点）",
         "discretization": "滤波半径序列与积分方法开关",
         "where": "src/py21cmfast/src/IonisationBox.c:1123 → :1145（find_ionised_regions 内）"
       },
-      "recomb->q_hii": {
+      "recomb->neutral_fraction": {
         "how": "电离判据要减掉累积复合量：上一红移的 cumulative_recombinations 是本步电离平衡的一阶项",
         "when": "每个红移一次，带跨红移记忆",
         "discretization": "复合系数插值表；时间步长由相邻快照红移差定",
         "where": "src/py21cmfast/src/IonisationBox.c:1085 读入 → :1277 参与判据"
       },
-      "q_hii->mfp": {
+      "neutral_fraction->mfp": {
         "how": "电离区的收敛半径即光子的平均自由程，与中性分数由同一判据给出",
-        "when": "每个红移一次（逐格点）",
+        "when": "每个红移一次；只在 INHOMO_RECO 且该格点首次越过判据、且未开 MINIMIZE_MEMORY 时写",
         "discretization": "滤波半径序列与最大自由程拟合式",
         "where": "src/py21cmfast/src/IonisationBox.c:1132"
       },
-      "q_hii->z_reion": {
+      "neutral_fraction->z_reion": {
         "how": "格点首次电离时记下红移，供下一红移的电离反馈改 M_turn 用",
         "when": "每个红移一次，带跨红移记忆（只在首次电离时写入）",
         "discretization": "红移快照间隔",
         "where": "src/py21cmfast/src/IonisationBox.c:1137-1140"
+      },
+      "j21_lw": {
+        "how": "把滤过的恒星形成率按 LW 预因子逐环壳累加成 LW 比强度场（只在 USE_MINI_HALOS 下写入，关闭时恒为 0）",
+        "when": "每个红移一次（ts_main 的逐格点循环内累加，写进该红移的 TsBox）",
+        "discretization": "与源项同网格；环壳序列 R_ct 由 R_MAX_TS × N_STEP_TS 分箱（与 filtered_sfr 同一套环）",
+        "where": "src/py21cmfast/src/SpinTemperatureBox.c:1697-1699 → :1825 → :1312"
+      },
+      "nion_grid": {
+        "how": "逐晕把电离光子产额按 CIC 累加到输出网格，再按格点体积归一（光子守恒时按全局平均重标定）",
+        "when": "每个红移一次（ComputeHaloBox → map_mass 的逐晕循环）",
+        "discretization": "CIC 到 HII_DIM³ 输出网格（out_dim），格点体积倒数 cell_vol_inv 归一；光子守恒的重标定因子 = averages_global.n_ion / averages_hbox.n_ion",
+        "where": "src/py21cmfast/src/map_mass.c:309-313 / :423-424 / :457-460（另 HaloBox.c:219）"
+      },
+      "neutral_fraction": {
+        "how": "逐格点电离判据：滤波后的塌缩分数越过门槛即置零，否则给残值并在 [0,1] 截断；气泡内用 update_in_sphere 整片抹平",
+        "when": "每个红移一次；内部另有一层滤波半径循环",
+        "discretization": "滤波半径序列（setup_radii）＋ R_BUBBLE_MAX / R_BUBBLE_MIN 截断；IONISE_ENTIRE_SPHERE 决定中心法与球法",
+        "where": "src/py21cmfast/src/IonisationBox.c:1185-1188"
+      },
+      "nion_grid->nion": {
+        "how": "同一次源项累加给出 3D 网格与体积平均（平均走加权积分，网格走 CIC 累加）",
+        "when": "每个红移一次",
+        "discretization": "—（平均量是标量，自身没有离散化参数）",
+        "where": "src/py21cmfast/src/map_mass.c:309-313 与 HaloBox.c:153-154"
+      },
+      "nion_grid->neutral_fraction": {
+        "how": "lagrangian 源网格路径下，电离判据的滤波输入就是 HaloBox.n_ion 网格",
+        "when": "每个红移一次（判据前的 R2C 变换）",
+        "discretization": "滤波半径序列（同电离判据）",
+        "where": "src/py21cmfast/src/IonisationBox.c:1476"
+      },
+      "neutral_fraction->q_hii": {
+        "how": "逐格点的场取盒均值（整体中性路径下直接给常数）",
+        "when": "每个红移一次",
+        "discretization": "—（体积平均，没有自己的离散化参数）",
+        "where": "src/py21cmfast/src/IonisationBox.c:1592（另 :538-546）"
+      },
+      "filtered_sfr->j21_lw": {
+        "how": "滤过的恒星形成率按 LW 预因子逐环壳累加，给出 LW 比强度场",
+        "when": "每个红移一次",
+        "discretization": "环壳序列 R_ct（R_MAX_TS × N_STEP_TS）",
+        "where": "src/py21cmfast/src/SpinTemperatureBox.c:1697-1699"
       }
     }
   },
   "algorithmPending": {
-    "note": "尚无锚点的条目，显式列名（规则：不许静默留空）。2026-09-30 把当时的 28 个量（含 4 个盒子产物 matter_power / vcb / perturb_field / filtered_xray）与全部边补齐；五个过程块的成员展开后总数是 38 个量，新增的 11 个成员与 9 条块内关系的锚点同批带上，名单仍为空。以后新增节点/边若一时没有证据，往这里加，自检会盯着。",
+    "note": "尚无锚点的条目，显式列名（规则：不许静默留空）。名单现为空：图上每个物理量、每个驱动量、每条边都有锚点；将来新增节点或边若一时拿不出证据，往这里加，自检会盯着。",
     "nodes": [],
     "drivers": [],
     "edges": "none"
@@ -3266,17 +3534,17 @@
     {
       "from": "block:thermal",
       "to": "block:halobox",
-      "fromNode": "ts",
-      "toNode": "nion",
-      "codeRef": "HaloBox.c:495（签名：SpinTemperatureBox.h 的 ComputeHaloBox 收 previous_spin_temp）",
+      "fromNode": "j21_lw",
+      "toNode": "nion_grid",
+      "codeRef": "HaloBox.c:491 J21_val = previous_spin_temp->J_21_LW[i]（签名：HaloBox.c:487 的 ComputeHaloBox 收 previous_spin_temp）",
       "note": "J21_val = previous_spin_temp->J_21_LW[i]，再 lyman_werner_threshold(z, J21_val, curr_vcb) 改写 M_turn_m。previous 说明它来自上一个红移。"
     },
     {
       "from": "block:ionization",
       "to": "block:halobox",
-      "fromNode": "q_hii",
-      "toNode": "nion",
-      "codeRef": "HaloBox.c:496（签名：HaloBox.c:563 的 ComputeHaloBox 收 previous_ionize_box）",
+      "fromNode": "gamma_12",
+      "toNode": "nion_grid",
+      "codeRef": "HaloBox.c:492-493 Gamma12_val = previous_ionize_box->ionisation_rate_G12[i]、zre_val = previous_ionize_box->z_reion[i]（签名：HaloBox.c:563 的 ComputeHaloBox 收 previous_ionize_box）",
       "note": "Gamma12_val = previous_ionize_box->ionisation_rate_G12[i]、zre_val = previous_ionize_box->z_reion[i]，再 reionization_feedback(z, Gamma12_val, zre_val) 改写 M_turn_r。"
     }
   ],
@@ -3853,6 +4121,15 @@
     },
     "tau_e": {
       "formula": "\\tau_e=\\sigma_T\\,\\bar n_{\\rm H,0}\\,c\\int_{0}^{\\infty}\\mathrm dz\\,\\frac{(1-Q_{\\rm HII})\\,(1+z)^{2}}{H(z)}"
+    },
+    "j21_lw": {
+      "formula": "J_{21}^{\\rm LW}(\\mathbf x)=\\frac{c}{4\\pi}\\,\\frac{M_\\odot}{m_p}(1-0.75\\,Y_{\\rm He})\\,\\frac{\\dot\\rho_\\star(\\mathbf x)}{10^{-21}\\,\\mathrm{erg\\,s^{-1}cm^{-2}Hz^{-1}sr^{-1}}}"
+    },
+    "nion_grid": {
+      "formula": "\\dot n_{\\rm ion}(\\mathbf x)=f_{\\rm esc}N_{\\rm ion}\\,\\dot\\rho_\\star(\\mathbf x)"
+    },
+    "neutral_fraction": {
+      "formula": "x_{\\rm HI}(\\mathbf x)=1-\\zeta f_{\\rm coll}(\\mathbf x)-\\zeta_{\\rm mini}f_{\\rm coll}^{\\rm mini}(\\mathbf x)-x_{\\rm HII}^{\\rm X}(\\mathbf x)\\quad(\\text{截断到 }[0,1]\\text{；越门槛即置 0})"
     }
   }
 }

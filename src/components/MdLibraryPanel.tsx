@@ -12,13 +12,14 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react'
+import { HeadingText } from './HeadingText'
 import { Badge, Separator } from './ui/badge'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { ScrollArea } from './ui/scroll-area'
 import { Tooltip } from './ui/tooltip'
 import { cn, formatChars } from '../lib/utils'
-import { headingIndent } from '../lib/slug'
+import { headingIndent, headingSlug } from '../lib/slug'
 import { PANEL_RAIL_WIDTH } from '../hooks/usePanelWidth'
 import type { MdDoc } from '../lib/types'
 
@@ -158,23 +159,25 @@ export function MdLibraryPanel({
               <li key={`${doc.docId}-${heading.slug}`}>
                 <button
                   type="button"
-                  onClick={() => onOpenDoc(doc.docId, heading.slug)}
+                  onClick={() => onOpenDoc(doc.docId, headingSlug(heading.text))}
                   style={{ marginLeft: headingIndent(heading.depth) }}
                   className="group/heading flex w-full cursor-pointer items-center justify-between gap-1.5 rounded px-1.5 py-1 text-left text-micro text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground"
                 >
-                  <span className="min-w-0 flex-1 truncate">{heading.text}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    <HeadingText text={heading.text} />
+                  </span>
                   <span
                     role="button"
                     tabIndex={-1}
                     title="把该章节加入节点引用"
                     onClick={(event) => {
                       event.stopPropagation()
-                      onAddRef(doc.docId, heading.slug, heading.text)
+                      onAddRef(doc.docId, headingSlug(heading.text), heading.text)
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.stopPropagation()
-                        onAddRef(doc.docId, heading.slug, heading.text)
+                        onAddRef(doc.docId, headingSlug(heading.text), heading.text)
                       }
                     }}
                     className={cn(

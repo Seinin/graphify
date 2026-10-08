@@ -53,11 +53,12 @@ import { Badge, Separator } from './ui/badge'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
 import { Tooltip } from './ui/tooltip'
+import { HeadingText } from './HeadingText'
 import { useMdContent } from '../hooks/useMdLibrary'
-import { anchorDomId, findHeading, headingIndent } from '../lib/slug'
+import { anchorDomId, findHeading, headingIndent, headingSlug, rehypeHeadingAnchors } from '../lib/slug'
 import { cn, formatChars } from '../lib/utils'
 import { copyText, openInVscode } from '../lib/vscode'
-import type { GraphRef, MdHeading } from '../lib/types'
+import type { GraphRef } from '../lib/types'
 
 /**
  * 允许标题上的 id，便于锚点定位；其余沿用 rehype-sanitize 默认白名单。
@@ -68,10 +69,15 @@ import type { GraphRef, MdHeading } from '../lib/types'
  * 只放行 /^language-./ 的类名，会把 `math-display` / `math-inline` 丢掉，
  * 因此这里在保留原正则的前提下显式补上这两个类名（只是两个字面量，不放宽其它属性）。
  * `language-math` 必须留下：rehype-katex 靠它识别待渲染元素。
+ *
+ * clobberPrefix 必须置空：sanitize 默认给每个 id 加 `user-content-` 前缀（防 DOM clobbering），
+ * 而标题锚点的 id 是 `anchorDomId()` 算出来的、页面用 getElementById 原样去找的。
+ * 前缀一加就对不上，目录点击与按引用定位会**一篇文档都不动**，且不报错。
  */
 const baseSchema = defaultSchema as unknown as { attributes?: Record<string, unknown[]> }
 const sanitizeSchema = {
   ...defaultSchema,
+  clobberPrefix: '',
   attributes: {
     ...baseSchema.attributes,
     code: [['className', /^language-./, 'math-display', 'math-inline']],
@@ -103,17 +109,44 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
 
   const headings = useMemo(() => (doc ? doc.headings.filter((heading) => heading.depth <= 3) : []), [doc])
 
+  /**
+   * 按引用打开时滚到目标小节。
+   *
+   * 正文里有公式与代码高亮要现算，标题什么时候落到 DOM 里说不准，所以不赌一个固定延时：
+   * 逐帧找，找到就滚（找不到的极限是 20 帧，那时人眼也早该看到正文了）。
+   */
   useEffect(() => {
     if (!open || !doc || !anchor) return
-    const timer = setTimeout(() => {
-      document.getElementById(anchorDomId(doc.docId, anchor))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 140)
-    return () => clearTimeout(timer)
+    // 标题 id 一律按「剥掉序号后的标题文字」现算（lib/slug.ts），递进来的锚点却可能来自别处
+    // （旧口径的服务端 slug、笔记库里存的章节）。所以按锚点找到标题后，再用该标题的文字算一份 id 兜底。
+    const heading = findHeading(doc.headings, anchor)
+    const targets = [anchorDomId(doc.docId, anchor)]
+    if (heading) targets.push(anchorDomId(doc.docId, headingSlug(heading.text)))
+    let frame = 0
+    let tries = 0
+    const tick = () => {
+      const node = targets.map((id) => document.getElementById(id)).find((element) => element !== null)
+      if (node) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      if (tries++ < 20) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
   }, [open, doc, anchor])
 
-  const jumpTo = (slug: string) => {
+  /**
+   * 大纲项的 slug 来自服务端，正文标题的 id 却是渲染阶段按标题文字算的（见 lib/slug.ts）。
+   * 两边同一规则，但服务端是常驻进程：规则改了而进程没重启，它就还在发旧 slug，
+   * 点目录会静默不动。所以先按标题文字现算一次 id，再退回服务端给的 slug。
+   */
+  const jumpTo = (slug: string, text: string) => {
     if (!doc) return
-    document.getElementById(anchorDomId(doc.docId, slug))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const node =
+      document.getElementById(anchorDomId(doc.docId, headingSlug(text))) ??
+      document.getElementById(anchorDomId(doc.docId, slug))
+    node?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const targetLine = activeHeading?.line ?? 1
@@ -124,16 +157,22 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
     if (!result.ok) copyText(`${doc.absolutePath}:${targetLine}`)
   }
 
-  const renderHeading = (depth: number) => (props: { children?: React.ReactNode }) => {
-    const text = String(props.children ?? '')
-    const heading: MdHeading | undefined = doc?.headings.find((item) => item.text === text)
+  /** react-markdown 交给自定义组件的 props：`node` 是 hast 节点，其余才是要落到 DOM 上的属性 */
+  type HeadingProps = React.ComponentPropsWithoutRef<'h2'> & { node?: unknown }
+
+  /**
+   * 标题只负责排印：锚点 id 由 rehypeHeadingAnchors 在转换阶段按节点顺序挂好（见 lib/slug.ts）。
+   *
+   * `node` 之外一律透传。这里曾经只取 children，把 `id` 连同其它属性一起丢掉，
+   * DOM 上便一个锚点都没有——`getElementById` 恒为 null，点目录与按引用定位全部静默不动。
+   */
+  const renderHeading = (depth: number) => (props: HeadingProps) => {
     const Tag = `h${depth}` as 'h1' | 'h2' | 'h3' | 'h4'
+    const { className, children, ...rest } = props
+    delete (rest as { node?: unknown }).node
     return (
-      <Tag
-        id={doc && heading ? anchorDomId(doc.docId, heading.slug) : undefined}
-        className={cn('scroll-mt-4 text-foreground/92', HEADING_CLASS[depth])}
-      >
-        {props.children}
+      <Tag {...rest} className={cn('scroll-mt-4 text-foreground/92', HEADING_CLASS[depth], className)}>
+        {children}
       </Tag>
     )
   }
@@ -148,7 +187,11 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
               <SheetDescription className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span className="truncate font-mono">{doc?.docId ?? docId}</span>
                 {doc ? <Badge tone="muted">{formatChars(doc.chars)}</Badge> : null}
-                {activeHeading ? <Badge tone="primary">§ {activeHeading.text}</Badge> : null}
+                {activeHeading ? (
+                  <span className="truncate text-micro text-muted-foreground">
+                    § <HeadingText text={activeHeading.text} />
+                  </span>
+                ) : null}
               </SheetDescription>
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -188,16 +231,16 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
                         <li key={heading.slug}>
                           <button
                             type="button"
-                            onClick={() => jumpTo(heading.slug)}
+                            onClick={() => jumpTo(heading.slug, heading.text)}
                             style={{ paddingLeft: 10 + headingIndent(heading.depth) }}
                             className={cn(
                               'w-full cursor-pointer truncate rounded px-2 py-1 pr-2 text-left text-micro transition-colors',
                               isActive
-                                ? 'bg-primary/15 text-primary'
+                                ? 'bg-black/[0.07] font-medium text-foreground'
                                 : 'text-muted-foreground hover:bg-black/[0.04] hover:text-foreground',
                             )}
                           >
-                            {heading.text}
+                            <HeadingText text={heading.text} />
                           </button>
                         </li>
                       )
@@ -220,11 +263,14 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
             ) : doc ? (
               <article className="md-body min-w-0 break-words text-tiny leading-[1.85]">
                 <ReactMarkdown
-                  // 顺序不可颠倒：remark-math 先把 $...$ 转成带 language-math 的 code 元素，
-                  // sanitize 放行该元素，最后才由 rehype-katex 渲染成 KaTeX 结构
+                  // 顺序不可颠倒：先按节点顺序给标题挂锚点 id（公式那时还是 LaTeX 原文，slug 才对得上），
+                  // 再由 sanitize 放行 id，最后才由 rehype-katex 把带 language-math 的 code 渲染成 KaTeX 结构
                   // （katex 的输出是可信 HTML，若放在 sanitize 之前会被白名单剥掉）。
                   remarkPlugins={[remarkGfm, remarkMath]}
                   rehypePlugins={[
+                    // 工厂与它的参数分两格：写成 rehypeHeadingAnchors(doc.docId) 是把**转换器**当插件，
+                    // unified 会再拿空参数调一次，tree 成了 undefined，一进 visit 就崩。
+                    [rehypeHeadingAnchors, doc.docId],
                     [rehypeSanitize, sanitizeSchema],
                     [rehypeKatex, { throwOnError: false, strict: 'ignore', errorColor: '#dc2626' }],
                   ]}
@@ -308,8 +354,14 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
 
         {canAddRef && doc ? (
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-2.5">
-            <span className="truncate text-micro text-muted-foreground">
-              {activeHeading ? `将引用定位到「${activeHeading.text}」` : '引用整个文档'}
+            <span className="flex min-w-0 items-baseline truncate text-micro text-muted-foreground">
+              {activeHeading ? (
+                <>
+                  将引用定位到「<HeadingText text={activeHeading.text} />」
+                </>
+              ) : (
+                '引用整个文档'
+              )}
             </span>
             <Button
               size="sm"
@@ -317,7 +369,7 @@ export function MdReaderDrawer({ open, onOpenChange, docId, anchor, canAddRef, o
               onClick={() =>
                 onAddRef({
                   docId: doc.docId,
-                  anchor: activeHeading?.slug ?? '',
+                  anchor: activeHeading ? headingSlug(activeHeading.text) : '',
                   label: activeHeading?.text ?? doc.title,
                 })
               }

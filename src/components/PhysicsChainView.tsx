@@ -80,6 +80,16 @@ const ARTIFACT = chainArtifact as unknown as {
 const SEARCH_PANEL_DEFAULT_WIDTH = 304
 
 /**
+ * 主图那一页（一级）在标签条里的 id 与标题。
+ *
+ * 「块自己与一级的散点都画在主图上」这条判据要有名字才落得下来：检索命中一个块、
+ * 点一条过程词条，落点都在主图上——从别的子图里做这两件事得先回主图，否则"选中了却看不见"
+ * （见 `revealNode` / `showRootTab`）。
+ */
+const ROOT_TAB_ID = 'chain:root'
+const ROOT_TAB_LABEL = '物理链'
+
+/**
  * 这里原先拼过块的**代码锚**人话（属性页那一行"这块在代码里是什么"）。
  * 已撤：那一行点不开、给不出可核验的落点；
  * 块算在哪段代码里改由「源码」标签页的落点清单回答（文件 + 行区间，可点即开）。
@@ -303,8 +313,8 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
    * （`enterable` 由生成物按真源的 `kind` 给出：层一定为假）。拦在这里并说明一句，
    * 而不是让画布进去或"点了没反应"。
    */
-  const [tabs, setTabs] = useState<TabInfo[]>([{ id: 'chain:root', focusId: null, label: '物理链' }])
-  const [activeTabId, setActiveTabId] = useState('chain:root')
+  const [tabs, setTabs] = useState<TabInfo[]>([{ id: ROOT_TAB_ID, focusId: null, label: ROOT_TAB_LABEL }])
+  const [activeTabId, setActiveTabId] = useState(ROOT_TAB_ID)
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const openSubgraph = useCallback(
     (nodeId: string) => {
@@ -336,15 +346,39 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
   )
 
   /**
-   * 命中/选中一个块里的对象时，把它**摆到看得见的地方**：它所在的块可进入就进那个块。
+   * 回主图那一页：块自己与一级的散点（`seg:*`）都画在那里。
+   * 主图那一页在标签条上也是能关的，所以回之前先把它补回列表（关过就补在队首），不留"回不去"的状态。
+   */
+  const showRootTab = useCallback(() => {
+    setTabs((list) =>
+      list.some((tab) => tab.id === ROOT_TAB_ID)
+        ? list
+        : [{ id: ROOT_TAB_ID, focusId: null, label: ROOT_TAB_LABEL }, ...list],
+    )
+    setActiveTabId(ROOT_TAB_ID)
+  }, [])
+
+  /**
+   * 命中/选中一个对象时，先把它**摆到看得见的地方**——切到画它的那一页，再谈选中。
+   *
+   * 哪一页画它，判据只有一条（归属走 `blockOf`）：
+   *   · 是某个块的成员 → 进它所属块的那一页（层不可进入，它没有子图，只能落在原地）；
+   *   · 不是任何块的成员（块自己、一级的 `seg:*` 散点）→ 它们画在**主图**上，
+   *     从别的子图里检索到它们时必须先回主图。左栏检索命中一个过程词条时，落点正是它的**主块**
+   *     （一个块 id），走的就是这一路——不先回主图，选中的就是一个当前页不画的盒子。
+   *
    * 一级已经没有折叠条可展开了——工程项本来就不在一级，它在某个块的成员层里。
    */
   const revealNode = useCallback(
     (nodeId: string) => {
       const block = blockOf(nodeId)
-      if (block?.enterable) openSubgraph(block.id)
+      if (block) {
+        if (block.enterable) openSubgraph(block.id)
+        return
+      }
+      showRootTab()
     },
-    [openSubgraph],
+    [openSubgraph, showRootTab],
   )
 
   /**
@@ -385,7 +419,7 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
 
   const closeTab = (id: string) => {
     setTabs((list) => list.filter((tab) => tab.id !== id))
-    if (activeTabId === id) setActiveTabId('chain:root')
+    if (activeTabId === id) setActiveTabId(ROOT_TAB_ID)
   }
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
   /** 左栏的检索词（受控在页面里：切页要清空，面板只管显示） */
@@ -627,7 +661,11 @@ export function PhysicsChainView({ focus, onSelectionChange }: PhysicsChainViewP
     setActiveParam(null)
     setActiveTagIds([])
     const entry = processEntries.find((item) => item.id === id)
-    if (entry?.primaryBlock) select('node', entry.primaryBlock)
+    // 定位落在**主块**上，而主块画在主图：从别的子图里点这条词条，先回主图才看得见（同 `revealNode`）
+    if (entry?.primaryBlock) {
+      revealNode(entry.primaryBlock)
+      select('node', entry.primaryBlock)
+    }
   }
 
   /** 从参数脚上那排「属于」跳过来：切到过程面并选中那条 */

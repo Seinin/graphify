@@ -176,6 +176,24 @@
     font-family: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, monospace;
     font-size: 0.86em;
   }
+
+  /*
+   * 目录／「§ 当前小节」徽标里的行内公式（`HeadingText.tsx`）。
+   * 那两处的字号本来就比正文小一档，所以公式跟着标题走、不套正文那份 1.04em；
+   * 坏公式的降级样式与阅读器同一套（红字块），否则目录里会露出生 LaTeX 源码。
+   */
+  .heading-math .katex {
+    font-size: 1.02em;
+    line-height: 1.15;
+  }
+
+  .heading-math .katex-error {
+    padding: 0 3px;
+    border-radius: 4px;
+    background: rgb(248 113 113 / 0.12);
+    font-family: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, monospace;
+    font-size: 0.86em;
+  }
 }
 
 @layer utilities {

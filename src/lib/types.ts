@@ -148,6 +148,19 @@ export const refLocationShort = (ref: GraphRef): string => {
 }
 
 /**
+ * notes 引用的**文件名**（不带目录、也不带锚点）：`halobox.md`。
+ *
+ * 与 `refLocationShort` 的分工：那一个是"这一处落点在哪"（带 `#锚点`，印在出处那一行），
+ * 这一个只回答"哪一篇"——清单按文档归并时，卡片**主行**说的是这一篇，
+ * 锚点由下面那排逐锚点的芯片承担（同 `codeRefFileName` 之于行区间）。
+ */
+export const docRefFileName = (ref: GraphRef): string => {
+  const path = String(ref.docId ?? '')
+  const cut = path.lastIndexOf('/')
+  return cut === -1 ? path : path.slice(cut + 1)
+}
+
+/**
  * 全局标签注册表项。
  *
  * 与话题同一套模式：**id 与显示名分离**——节点只存 id，名称/说明/颜色放注册表，

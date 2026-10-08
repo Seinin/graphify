@@ -4,7 +4,8 @@
  * 口径来自 `docs/notes/physics-chain/README.md`（账本），本文件只做**取数与规则编码**，不做判断：
  *   · **层级**（layer）：表面 / 子图 —— 表面只放物理（公式、物理量、谱、函数、过程），
  *     工程实现与实现选择沉到它所属节点的子图里；**子图不是"工程的去处"**，里面也可以再是物理。
- *   · **种类**（kind）：物理量 / 谱 / 函数 / 过程 / 工程项 —— 颜色按它分。
+ *   · **种类**（kind）：物理量 / 谱 / 函数 / 过程 / 工程项 —— 名字由本文件出（`KIND_LABELS`），
+ *     颜色不在本文件：按 `node[type]` 取自 `lib/types.ts` 的 `NODE_TYPE_COLORS`。
  *   · **观测量**（observable）：不占颜色，视图上用重边框表示（`δT_b` 既是量又是出口，一个节点只能有一种颜色）。
  *   · **开关**：挂在**边**上（虚线箭头 + 箭头上的虚线框）；`gatesEdges` 里的 `from->to` 就是它门控的边。
  */
@@ -278,8 +279,15 @@ export const degeneracies = (): unknown[] => chain.degeneracies ?? []
 
 export const statsOf = (): Record<string, number> => chain.stats ?? {}
 
-/* ---------------- 种类与颜色（颜色只表示"它是什么"，观测量用重边框） ---------------- */
+/* ---------------- 种类（名字在这，颜色在 types.ts；观测量用重边框、不占颜色） ---------------- */
 
+/**
+ * 种类显示名：**名字**这里的唯一真源。
+ *
+ * **颜色不在这张表里**：种类色按 `node[type]` 取自 `lib/types.ts` 的 `NODE_TYPE_COLORS`，
+ * 由 `graph/styles.ts` → `cytoscapeSetup.ts` 施加到画布（属性面板那颗圆点徽标读同一张表）。
+ * 同一件事只留一处口径——两张并存的色表会让人照另一份去读出并不存在的颜色。
+ */
 export const KIND_LABELS: Record<NodeKind, string> = {
   quantity: '物理量',
   spectrum: '谱',
@@ -288,20 +296,6 @@ export const KIND_LABELS: Record<NodeKind, string> = {
   engineering: '工程项',
   driver: '驱动量',
 }
-
-/** 每个种类一个色相；子图节点统一压暗（仍保留自己的色相，便于分辨种类） */
-export const KIND_STYLES: Record<NodeKind, { dot: string; border: string; text: string; bg: string }> = {
-  quantity: { dot: 'bg-sky-500', border: 'border-sky-300', text: 'text-sky-900', bg: 'bg-sky-50' },
-  spectrum: { dot: 'bg-indigo-500', border: 'border-indigo-300', text: 'text-indigo-900', bg: 'bg-indigo-50' },
-  function: { dot: 'bg-violet-500', border: 'border-violet-300', text: 'text-violet-900', bg: 'bg-violet-50' },
-  process: { dot: 'bg-emerald-500', border: 'border-emerald-300', text: 'text-emerald-900', bg: 'bg-emerald-50' },
-  engineering: { dot: 'bg-slate-400', border: 'border-slate-300', text: 'text-slate-700', bg: 'bg-slate-100' },
-  driver: { dot: 'bg-amber-500', border: 'border-amber-300', text: 'text-amber-900', bg: 'bg-amber-50' },
-}
-
-/** 取样式时一律走这里：认不出的种类降级成工程项那种暗色，**不抛错**（页面不该因为一个字段崩掉） */
-export const kindStyleOf = (node: ChainNode): (typeof KIND_STYLES)[NodeKind] =>
-  KIND_STYLES[node.kind] ?? KIND_STYLES.engineering
 
 /** 种类显示名，同样兜底 */
 export const kindLabelOf = (node: ChainNode): string => KIND_LABELS[node.kind] ?? String(node.kind ?? '未标种类')

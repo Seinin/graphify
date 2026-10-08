@@ -13,14 +13,18 @@
  *       - 不兼容命令降级为 .katex-error 而不是整块消失
  *     这一步专门守「rehype-sanitize 把 math 占位元素剥掉导致公式全没了」这个最高风险点。
  *
- * 另有一条源码契约断言：插件三元组必须与 MdReaderDrawer.tsx 保持一致，
- * 任何一侧改动而另一侧没跟上都会在这里报错。
+ *  3) 与 MdReaderDrawer.tsx 的源码契约：插件三元组两侧必须一致，
+ *     任何一侧改动而另一侧没跟上都会在这里报错。
+ *  4) 标题公式：目录（大纲）与「§ 当前小节」徽标拿的是服务端抽出的标题**纯文本**，
+ *     不经过上面那条 markdown 管线，所以单独真渲染一遍（HeadingText.tsx），
+ *     并盯住两处消费点不许绕过它直印标题文本。
  *
  * 用法：node scripts/check-latex.mjs
  */
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import * as esbuild from 'esbuild'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ReactMarkdown from 'react-markdown'
@@ -228,6 +232,123 @@ async function checkContract() {
   return failed
 }
 
+/* ------------------------------------------------------------------ *
+ * 4) 标题公式（目录／徽标：HeadingText.tsx）
+ * ------------------------------------------------------------------ */
+
+const HERE = import.meta.dirname
+const HEADING_FILE = path.resolve(HERE, '..', 'src', 'components', 'HeadingText.tsx')
+const LIBRARY_FILE = path.resolve(HERE, '..', 'src', 'components', 'MdLibraryPanel.tsx')
+const INSPECTOR_FILE = path.resolve(HERE, '..', 'src', 'components', 'Inspector.tsx')
+
+/**
+ * 把 HeadingText.tsx 打包进 `data/`（已被 git 忽略）再按 ESM 导入——`data:` URL 解析不了裸模块名。
+ * 与 `check-physics-chain.mjs` 的 loadTs 同一做法：**真渲染**，不是只查源码字符串。
+ * react 走 external：本脚本自己也要用同一份 react-dom/server 渲染，不能出现两份 React。
+ * CSS 导入换成空模块：这里只要组件产出的 HTML，不需要 KaTeX 的样式表。
+ */
+async function loadHeadingText() {
+  const outfile = path.resolve(HERE, '..', 'data', '.check-latex-heading.mjs')
+  await esbuild.build({
+    entryPoints: [HEADING_FILE],
+    bundle: true,
+    format: 'esm',
+    outfile,
+    platform: 'node',
+    logLevel: 'silent',
+    external: ['react', 'react/jsx-runtime', 'react-dom'],
+    // 自动 JSX 运行时：本文件只 `import { useState }` 之类的具名导入，
+    // 一旦走 classic 运行时（React.createElement）就会缺 React 标识符。
+    jsx: 'automatic',
+    plugins: [
+      {
+        name: 'stub-css',
+        setup(build) {
+          build.onResolve({ filter: /\.css$/ }, (args) => ({ path: args.path, namespace: 'stub-css' }))
+          build.onLoad({ filter: /.*/, namespace: 'stub-css' }, () => ({ contents: '', loader: 'js' }))
+        },
+      },
+    ],
+  })
+  return import(`file://${outfile}`)
+}
+
+/**
+ * 渲染一段标题文本。先摘掉 MathML 的 <annotation>：里面原样保留 TeX 源码，
+ * 会让"有没有残留定界符／源码"的判断失真（做法同上面那条正文管线断言）。
+ */
+function renderHeading(HeadingText, text) {
+  return renderToStaticMarkup(React.createElement(HeadingText, { text })).replace(
+    /<annotation[^>]*>[\s\S]*?<\/annotation>/g,
+    '',
+  )
+}
+
+async function checkHeadingMath() {
+  let failed = 0
+  const ok = (label, condition) => {
+    console.log(`  ${condition ? '✓' : '✗'} ${label}`)
+    if (!condition) failed += 1
+  }
+
+  const { HeadingText } = await loadHeadingText()
+  ok('能加载并调用 HeadingText.tsx', typeof HeadingText === 'function')
+
+  // 渲染样本取自真文档：标题里写着 LaTeX。文档侧若不再有这种标题，这条会失败，提示去换样本。
+  const halobox = await fs.readFile(path.join(MD_DIR, 'physics-chain', 'modules', 'halobox.md'), 'utf8').catch(() => '')
+  const sample = halobox.split('\n').find((line) => /^#{2,4}\s/.test(line) && line.includes('$'))
+  ok('物理链文档的标题里确有 LaTeX（样本存在）', Boolean(sample))
+
+  if (sample) {
+    const text = sample.replace(/^#+\s*/, '')
+    const html = renderHeading(HeadingText, text)
+    ok('标题里的公式渲染成 KaTeX', html.includes('class="katex"'))
+    ok('标题里不残留 $ 定界符，也不漏 LaTeX 源码', !html.includes('$') && !html.includes('\\rm'))
+    // 公式之后的散文在 HTML 里是连续的一段，用它反证"只渲染公式、把字吞了"
+    const prose = text.split('$').pop().trim()
+    ok('公式以外的标题文字未被打散', prose.length > 2 && html.includes(prose.slice(0, 6)))
+  }
+
+  const mixed = renderHeading(HeadingText, '前 \\(x^2\\) 中 $y_i$ 后')
+  ok('$…$ 与 \\(…\\) 两种定界符都被消费（两处 KaTeX）', (mixed.match(/class="katex"/g) || []).length === 2)
+  ok('与公式混排的前后文字照常显示', ['前', '中', '后'].every((piece) => mixed.includes(piece)))
+
+  const broken = renderHeading(HeadingText, '后面 $\\foo{x}$ 还有正文')
+  // KaTeX 0.16：整条解析不了才出 .katex-error，未定义命令是就地渲染成 errorColor 的红字
+  ok('坏公式降级可见（红色 / katex-error），不是静默消失', /#cc0000|katex-error/.test(broken))
+  ok('坏公式不影响同一行其余文字', broken.includes('还有正文'))
+
+  const plain = renderHeading(HeadingText, '五、两个回流')
+  ok('无公式的标题原样输出、不产生 KaTeX', !plain.includes('katex') && plain.includes('五、两个回流'))
+
+  const drawer = await fs.readFile(DRAWER_FILE, 'utf8').catch(() => '')
+  const library = await fs.readFile(LIBRARY_FILE, 'utf8').catch(() => '')
+  // 先摘掉"通过 HeadingText 渲染"的用法，再查有没有落在 JSX 文本位上的直印（`>{heading.text}<`）
+  const withoutHeading = (source) => source.replace(/<HeadingText text=\{(?:heading|activeHeading)\.text\} \/>/g, '')
+  ok('阅读器大纲的每条标题走 HeadingText', /<HeadingText text=\{heading\.text\} \/>/.test(drawer))
+  ok('阅读器标题旁的小节名走 HeadingText', /<HeadingText text=\{activeHeading\.text\} \/>/.test(drawer))
+  ok(
+    '阅读器不再直印标题文本',
+    !/>\{heading\.text\}</.test(withoutHeading(drawer)) && !/>\{activeHeading\.text\}</.test(withoutHeading(drawer)),
+  )
+  ok('笔记库章节清单走 HeadingText', /<HeadingText text=\{heading\.text\} \/>/.test(library))
+  ok('笔记库不再直印标题文本', !/>\{heading\.text\}</.test(withoutHeading(library)))
+
+  // 引用标签也是标题原文（加入引用时按 `label: heading.text` 存），三处都得渲染
+  const inspector = await fs.readFile(INSPECTOR_FILE, 'utf8').catch(() => '')
+  ok('文献卡片主行的标签走 HeadingText', /<HeadingText text=\{ref\.label \|\| ref\.anchor \|\| location\} \/>/.test(inspector))
+  ok('归并卡片的锚点芯片走 HeadingText', /<HeadingText text=\{ref\.label \|\| ref\.anchor \|\| '正文'\} \/>/.test(inspector))
+  ok('阅读器「将引用定位到…」提示走 HeadingText', /将引用定位到「<HeadingText text=\{activeHeading\.text\} \/>」/.test(drawer))
+
+  const source = await fs.readFile(HEADING_FILE, 'utf8').catch(() => '')
+  ok('HeadingText 坏公式不抛错（与阅读器同档）', /throwOnError:\s*false/.test(source))
+  ok('HeadingText 已引入 katex 样式', /import 'katex\/dist\/katex\.min\.css'/.test(source))
+  const mathPattern = source.split('\n').find((line) => line.includes('const MATH')) ?? ''
+  ok('HeadingText 认两种定界符（$…$ 与 \\(…\\)）', mathPattern.includes('\\$') && mathPattern.includes('\\\\('))
+
+  return failed
+}
+
 /* ------------------------------------------------------------------ */
 
 const coverageFailures = await checkCoverage()
@@ -238,6 +359,9 @@ const pipelineFailures = checkPipeline()
 console.log('\n与 MdReaderDrawer.tsx 的契约：')
 const contractFailures = await checkContract()
 
-const total = coverageFailures + pipelineFailures + contractFailures
+console.log('\n标题公式（目录／徽标，HeadingText.tsx）：')
+const headingFailures = await checkHeadingMath()
+
+const total = coverageFailures + pipelineFailures + contractFailures + headingFailures
 console.log(total === 0 ? '\n全部通过。' : `\n共 ${total} 项失败。`)
 process.exit(total === 0 ? 0 : 1)

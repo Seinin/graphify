@@ -20,6 +20,7 @@
     "build:chain": "node scripts/build-physics-chain.mjs",
     "check:chain": "node scripts/check-physics-chain.mjs",
     "check:copy": "node scripts/check-copy.mjs",
+    "check:latex": "node scripts/check-latex.mjs",
     "build:atlas": "node scripts/build-atlas-graph.mjs",
     "import": "node scripts/import-graph.mjs"
   },

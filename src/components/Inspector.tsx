@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { Formula } from './Formula'
+import { HeadingText } from './HeadingText'
 import { Badge, DotBadge, Separator } from './ui/badge'
 import { Button } from './ui/button'
 import { Field, Input, Textarea } from './ui/input'
@@ -31,6 +32,7 @@ import {
   NODE_TYPE_ORDER,
   codeRefFileName,
   codeRefLineRange,
+  docRefFileName,
   isCodeRef,
   refLocation,
   refLocationShort,
@@ -293,7 +295,8 @@ export function Inspector({
    * 卡片第二行只给**不带目录的文件名**（`SpinTemperatureBox.c:120-145`），完整路径退到 `title`。
    *
    * **两类清单都按「同一个目标」归并**：源码按**文件**、文献按**文档**。一个文件一条，主行就是
-   * 文件名（`codeRefFileName` / `refLocationShort`），同一目标上的多个落点逐条列在下面、每条可点即开。
+   * 文件名（`codeRefFileName` / `docRefFileName`，**不带行区间与 `#锚点`**——主行说的是"哪一篇"），
+   * 同一目标上的多个落点逐条列在下面、每条可点即开，落点全称在各自的 `title` 里。
    * 理由同一条：一个块的证据常常全落在同一处——落点挤在同一个 `.c` 上、成员锚点全落在它自己那一篇
    * `.md` 里（逐锚点铺卡＝同一个文件名印 N 遍），而成员名标题在同一面板的「成员明细」上方已经出现过一遍。
    * 于是标签上的条数：源码＝落点条数、**文献＝文档数**——一个模块只有它自己那一篇笔记，写「文献 1」。
@@ -326,7 +329,7 @@ export function Inspector({
             className="min-w-0 flex-1 cursor-pointer text-left"
           >
             <span className="block truncate text-micro font-medium text-foreground/90">
-              {ref.label || ref.anchor || location}
+              <HeadingText text={ref.label || ref.anchor || location} />
             </span>
             <span className="block truncate font-mono text-micro text-muted-foreground/70">
               {refLocationShort(ref)}
@@ -421,8 +424,10 @@ export function Inspector({
     }
 
     /**
-     * 归并后的文献卡片：**主行＝文档名**（点它开这一篇的第一个锚点），下面一行是这篇里的各个锚点，
-     * 每个自己可点（`title` 给完整落点）。整卡没有删除按钮——`collapsed` 是可读页。
+     * 归并后的文献卡片：**主行＝文档名**（不带 `#锚点`；点它开这一篇的第一个锚点），
+     * 下面一行是这篇里的各个锚点，每个自己可点（`title` 给完整落点）。
+     * 锚点属于"哪一节"，属于下面那排芯片，不该挤进说"哪一篇"的主行。
+     * 整卡没有删除按钮——`collapsed` 是可读页。
      */
     const docCard = (docId: string, list: GraphRef[]) => (
       <li
@@ -437,7 +442,7 @@ export function Inspector({
             title={docId}
             className="block max-w-full cursor-pointer truncate text-left font-mono text-micro font-medium text-foreground/90"
           >
-            {refLocationShort(list[0])}
+            {docRefFileName(list[0])}
           </button>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {list.map((ref, index) => (
@@ -448,7 +453,7 @@ export function Inspector({
                 title={refLocation(ref)}
                 className="max-w-full cursor-pointer truncate rounded-[4px] bg-black/[0.05] px-1 text-left text-micro text-muted-foreground/75 transition-colors hover:bg-primary/[0.12] hover:text-foreground"
               >
-                {ref.label || ref.anchor || '正文'}
+                <HeadingText text={ref.label || ref.anchor || '正文'} />
               </button>
             ))}
           </div>
