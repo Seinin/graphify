@@ -54,6 +54,20 @@ export async function createApp() {
         next()
         return
       }
+      /*
+       * 带扩展名的请求一律当静态资源：没命中就是 404，不能吐首页。
+       *
+       * 构建产物带内容哈希，每次重新部署都会换名字。此前这里不分青红皂白把
+       * 任何 GET 都回成 index.html，于是旧页面（重新部署前打开、尚未刷新的标签页）
+       * 来要旧哈希的 `/assets/*.js`，拿到的是 `200` + 一页 HTML；浏览器把这页
+       * HTML 当脚本执行，报 `SyntaxError: Unexpected token '<'`。症状是白屏，
+       * 或者**只有按需加载的那部分打不开**（文档阅读器正是按需加载的 `markdown-*.js`），
+       * 而已经加载过的主界面看着一切正常——很难和「服务挂了」区分开。
+       */
+      if (path.extname(req.path)) {
+        res.status(404).type('txt').send('Not Found')
+        return
+      }
       res.sendFile(path.join(DIST_DIR, 'index.html'))
     })
   } else {
